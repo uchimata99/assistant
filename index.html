@@ -95,6 +95,13 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 .log .when{color:var(--ink-2);font-size:13px}
 .log .undo{color:var(--warn);font-weight:600;margin-inline-start:8px}
 
+.sheet{position:fixed;inset:0;background:var(--paper);z-index:40;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .28s ease}
+.sheet[aria-hidden="false"]{transform:none}
+.sheet .bar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--card)}
+.sheet .bar h3{margin:0;font-family:var(--font-head);font-weight:500;font-size:22px}
+.sheet pre{flex:1;overflow-y:auto;margin:0;padding:16px;font-family:var(--font-body);font-size:16px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.sheet .acts{display:flex;gap:10px;padding:14px 16px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--card)}
+.sheet .acts .btn{flex:1}
 .chat{position:fixed;inset:0;background:var(--paper);transform:translateY(100%);transition:transform .28s ease;z-index:30;display:flex;flex-direction:column}
 .chat.open{transform:none}
 .chat .bar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--card)}
@@ -210,6 +217,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
       <button data-q="מה נשאר לי להיום?">מה נשאר להיום</button>
       <button data-q="תסכם לי את השבוע הקרוב, כולל מה שמשותף">סיכום השבוע</button>
       <button data-q="סיום יום: תעזור לי לסגור את היום ולבחור את המטלות המהותיות למחר">סיום יום</button>
+      <button id="showdigest" type="button">הלוז של מחר</button>
     </div>
   </section>
   <section id="tab-week" hidden><div class="card" id="week"></div></section>
@@ -269,12 +277,15 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
         <label for="digestch">תקציר ערב עם הלוז של מחר</label>
         <select id="digestch">
           <option value="off">כבוי</option>
+          <option value="notify">התראה בטלפון</option>
           <option value="draft">טיוטה בג'ימייל</option>
           <option value="email">דואר אליי</option>
         </select>
         <select id="digesth"></select>
-        <div class="note">רץ בשרת בשעה שנקבעה, ומרכז את אירועי המחר, המטלות המהותיות, מה שעבר תאריך ומה שפתוח במשותף. "דואר אליי" נשלח אך ורק לכתובת של בעל הסקריפט.</div>
+        <div class="note">רץ בשרת בשעה שנקבעה, ומרכז את אירועי המחר, המטלות המהותיות, מה שעבר תאריך ומה שפתוח במשותף.</div>
+        <div class="note"><b>התראה בטלפון:</b> נוצר אירוע קצר ביומן האישי בשעה שבחרת, התקציר בתיאור שלו, ותזכורת קופצת ברגע האירוע. יומן גוגל מצלצל, לחיצה פותחת את הטקסט, ומשם העתקה ושיתוף. <b>דואר אליי</b> נשלח אך ורק לכתובת של בעל הסקריפט.</div>
         <button class="btn ghost" id="digestsave">החל וקבל תצוגה מקדימה</button>
+        <button class="btn ghost" id="digesttest">שלח התראת ניסיון עכשיו</button>
         <div class="status" id="digeststat"></div>
 
         <label for="mitmax">כמה מטלות מהותיות ביום</label>
@@ -310,6 +321,18 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
   <div class="hint" id="hint"></div>
 </div>
 
+<div class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-labelledby="sheet-h">
+  <div class="bar">
+    <h3 id="sheet-h">הלוז של מחר</h3>
+    <button class="ib" id="closesheet" aria-label="סגור"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <pre id="sheettext"></pre>
+  <div class="acts">
+    <button class="btn" id="sharedigest">שתף</button>
+    <button class="btn ghost" id="copydigest">העתק</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -328,7 +351,7 @@ const PROFILES = {
 };
 const DEFAULTS = {
   profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL',
-  remind:'30', digestChannel:'off', digestHour:21,
+  remind:'30', digestChannel:'notify', digestHour:21,
   hats:[], days:[], familyCalendarId:'',
   // התגים נוספים בהגדרות: שם, כינויים לזיהוי בדיבור ובהודעות, ויומן מהרשימה.
   tags:[],
@@ -720,6 +743,49 @@ async function send(text){
   }catch(err){ thinking.remove(); addMsg('לא הצלחתי לדבר עם השרת: '+err.message,'sys'); }
 }
 
+/* ===================== מסך הלוז של מחר ===================== */
+let digestText='';
+function openSheet(){ $('sheet').setAttribute('aria-hidden','false'); }
+function closeSheet(){ $('sheet').setAttribute('aria-hidden','true'); }
+async function showDigest(){
+  openSheet(); $('sheettext').textContent='קורא מהשרת...';
+  if(demo()){ digestText=demoDigest(); $('sheettext').textContent=digestText; return; }
+  try{ const r=await api('digest'); digestText=r.text||''; $('sheettext').textContent=digestText||'אין מה להציג.'; }
+  catch(err){ digestText=''; $('sheettext').textContent='לא הצלחתי לקרוא: '+err.message; }
+}
+function demoDigest(){
+  const t=new Date(); t.setDate(t.getDate()+1);
+  const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(t)).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const L=['מחר, יום '+HE_DAYS[t.getDay()]+' '+t.getDate()+'.'+(t.getMonth()+1),'','הלוז:'];
+  if(!evs.length) L.push('  אין אירועים ביומן. יום פתוח.');
+  evs.forEach(e=>L.push('  '+hhmm(new Date(e.start))+'–'+hhmm(new Date(e.end))+'  '+e.title+(e.location?' · '+e.location:'')));
+  const mits=S.tasks.filter(x=>x.mit&&!x.done);
+  L.push('','מטלות מהותיות שנבחרו:');
+  if(!mits.length) L.push('  עוד לא נבחרו. זה הרגע לבחור עד '+S.cfg.mitmax+'.');
+  mits.forEach(x=>L.push('  · '+x.title+(x.shared?' (משותף)':'')));
+  L.push('','לפני שסוגרים את היום: מה נסגר, ואיפה עצרת בכל כובע?');
+  return L.join('\n');
+}
+$('showdigest').addEventListener('click',showDigest);
+$('closesheet').addEventListener('click',closeSheet);
+$('copydigest').addEventListener('click',async()=>{
+  if(!digestText) return;
+  try{ await navigator.clipboard.writeText(digestText); toast('הועתק.'); }
+  catch(err){
+    // דפדפנים ישנים, או הקשר לא מאובטח
+    const ta=document.createElement('textarea'); ta.value=digestText; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); toast('הועתק.'); }catch(e2){ toast('ההעתקה נכשלה. אפשר לסמן ולהעתיק ידנית.'); }
+    ta.remove();
+  }
+});
+$('sharedigest').addEventListener('click',async()=>{
+  if(!digestText) return;
+  if(!navigator.share){ toast('אין שיתוף בדפדפן הזה. אפשר להעתיק.'); return; }
+  try{ await navigator.share({title:'הלוז של מחר',text:digestText}); }
+  catch(err){ if(err.name!=='AbortError') toast('השיתוף נכשל.'); }
+});
+
 /* ===================== תמונות ושיתוף מאפליקציות ===================== */
 function renderAttach(){ $('attach').innerHTML=S.images.map((im,i)=>`<div class="th"><img src="${im.src}" alt=""><button class="rm" data-i="${i}" aria-label="הסר">×</button></div>`).join(''); $('send').disabled=!$('input').value.trim()&&!S.images.length; }
 function addImageFile(file){
@@ -816,6 +882,18 @@ $('log').addEventListener('click',async e=>{
 });
 
 /* הגדרות */
+$('digesttest').addEventListener('click',async()=>{
+  if(demo()){$('digeststat').textContent='מצב הדגמה — צריך שרת מחובר.';return;}
+  $('digeststat').textContent='שולח...';
+  try{
+    await api('setDigest',{channel:$('digestch').value,hour:+$('digesth').value,appUrl:location.origin+location.pathname});
+    const r=await api('digest',{fire:true});
+    const ch=$('digestch').value;
+    $('digeststat').textContent=ch==='notify'?'נוצר אירוע ביומן. התזכורת תצלצל בשעה שבחרת.':ch==='email'?'נשלח אליך עכשיו.':ch==='draft'?"נשמרה טיוטה בג'ימייל.":'הערוץ כבוי.';
+    addLog('נשלחה התראת ניסיון של תקציר הערב',{by:'באישורך'});
+  }catch(err){$('digeststat').textContent='נכשל: '+err.message;}
+});
+
 $('save').addEventListener('click',()=>{
   S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.familyCalendarId=$('famcal').value;
   S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
@@ -862,7 +940,7 @@ $('digestsave').addEventListener('click',async()=>{
   S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value; save('cfg',S.cfg);
   $('digeststat').textContent='מחיל...';
   try{
-    const r=await api('setDigest',{channel:S.cfg.digestChannel,hour:S.cfg.digestHour});
+    const r=await api('setDigest',{channel:S.cfg.digestChannel,hour:S.cfg.digestHour,appUrl:location.origin+location.pathname});
     addLog('הוגדר תקציר ערב: '+(S.cfg.digestChannel==='off'?'כבוי':(S.cfg.digestChannel==='email'?'דואר':'טיוטה')+' בשעה '+pad(S.cfg.digestHour)+':00'),{by:'באישורך'});
     if(S.cfg.digestChannel==='off'){$('digeststat').textContent='כובה.';return;}
     const d=await api('digest');
@@ -884,6 +962,8 @@ $('who').addEventListener('click',e=>{const b=e.target.closest('button[data-p]')
 /* ===================== התחלה ===================== */
 if(!S.cfg.profile||!S.cfg.hats.length) $('who').hidden=false;
 renderAll(); setupSpeech(); loadAgenda(); loadTasks(); pickupShared();
+// הקישור בתיאור אירוע ההתראה נכנס ישר למסך הלוז
+if(new URLSearchParams(location.search).has('digest')) showDigest();
 setInterval(()=>{renderHeader();renderNow();},60000);
 // בלי זה מטלה שבן או בת הזוג הוסיפו לא מופיעה עד רענון של הדף
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ loadAgenda(); loadTasks(); if(logSrc==='server') loadServerLog(); } });

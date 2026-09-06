@@ -47,7 +47,7 @@ function doPost(e) {
       case 'deleteTask':     return json_(deleteTask_(b));
       case 'createDraft':    return json_(createDraft_(b));
       case 'log':            return json_({ entries: readLog_(b.limit || 120) });
-      case 'digest':         return json_({ text: buildDigest_(), config: digestConfig_() });
+      case 'digest':         return json_(digest_(b));
       case 'setDigest':      return json_(setDigest_(b));
       case 'chat':           return json_(chat_(b));
       default:               return json_({ error: 'פעולה לא מוכרת: ' + b.action });
@@ -284,9 +284,14 @@ function parseReply_(text) {
 /* ---------- תקציר ערב: לוז המחר, ערב קודם ---------- */
 /*
  * ערוץ המסירה נקבע במאפיין DIGEST_CHANNEL:
- *   draft (ברירת מחדל) — נשמר כטיוטה בג'ימייל. שומר על הכלל "לא שולחים מהקוד".
+ *   notify (מומלץ)     — אירוע קצר ביומן האישי בשעה שנבחרה, עם התקציר בתיאור ותזכורת קופצת.
+ *                        יומן גוגל מצלצל בטלפון, לחיצה פותחת את הטקסט, ומשם העתקה ושיתוף.
+ *   draft              — נשמר כטיוטה בג'ימייל. שומר על הכלל "לא שולחים מהקוד".
  *   email              — נשלח בדואר אל הכתובת של בעל הסקריפט עצמו, ואף פעם לא לאף אחד אחר.
  *   off                — כבוי.
+ *
+ * בערוץ notify הטריגר רץ שעתיים לפני שעת ההתראה, כי טריגר זמן באפס סקריפט מדויק
+ * רק לכדי שעה. השעתיים האלה הן מרווח הביטחון שהאירוע ייווצר לפני שהתזכורת אמורה לצלצל.
  * השעה נקבעת ב-DIGEST_HOUR. התקנת הטריגר: setDigest_ מהאפליקציה, או installDailyDigest() מהעורך.
  */
 const DIGEST_FN = 'dailyDigest';
@@ -294,31 +299,44 @@ const DIGEST_FN = 'dailyDigest';
 function digestConfig_() {
   const installed = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === DIGEST_FN);
   return {
-    channel: PROPS.getProperty('DIGEST_CHANNEL') || 'draft',
+    channel: PROPS.getProperty('DIGEST_CHANNEL') || 'notify',
     hour: Number(PROPS.getProperty('DIGEST_HOUR') || 21),
     installed: installed,
     to: selfEmail_(),
+    appUrl: PROPS.getProperty('APP_URL') || '',
   };
 }
 function selfEmail_() {
   return Session.getEffectiveUser().getEmail() || Session.getActiveUser().getEmail() || '';
 }
 function setDigest_(b) {
-  const channel = ['draft', 'email', 'off'].indexOf(b.channel) >= 0 ? b.channel : 'draft';
+  const channel = ['notify', 'draft', 'email', 'off'].indexOf(b.channel) >= 0 ? b.channel : 'notify';
   let hour = Number(b.hour); if (isNaN(hour) || hour < 0 || hour > 23) hour = 21;
   PROPS.setProperty('DIGEST_CHANNEL', channel);
   PROPS.setProperty('DIGEST_HOUR', String(hour));
+  if (b.appUrl) PROPS.setProperty('APP_URL', String(b.appUrl));
   ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === DIGEST_FN) ScriptApp.deleteTrigger(t); });
-  if (channel !== 'off') ScriptApp.newTrigger(DIGEST_FN).timeBased().atHour(hour).everyDays(1).create();
+  // בערוץ ההתראה מקדימים את הטריגר, כדי שהאירוע ייווצר לפני שהתזכורת צריכה לצלצל.
+  if (channel !== 'off') {
+    const runAt = channel === 'notify' ? (hour + 22) % 24 : hour;
+    ScriptApp.newTrigger(DIGEST_FN).timeBased().atHour(runAt).everyDays(1).create();
+  }
   log_('setDigest', channel + ' @ ' + hour);
   return { ok: true, config: digestConfig_() };
+}
+// המופע הקרוב הבא של השעה הזאת: היום אם עוד לא עברה, אחרת מחר.
+function nextAt_(hour) {
+  const d = new Date(); d.setMinutes(0, 0, 0);
+  if (d.getHours() >= hour) d.setDate(d.getDate() + 1);
+  d.setHours(hour);
+  return d;
 }
 function installDailyDigest() { Logger.log(JSON.stringify(setDigest_({ channel: PROPS.getProperty('DIGEST_CHANNEL') || 'draft', hour: PROPS.getProperty('DIGEST_HOUR') || 21 }))); }
 function removeDailyDigest() { Logger.log(JSON.stringify(setDigest_({ channel: 'off' }))); }
 
-function buildDigest_() {
+function buildDigest_(ref) {
   const HE_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-  const start = new Date(); start.setDate(start.getDate() + 1); start.setHours(0, 0, 0, 0);
+  const start = new Date(ref || new Date()); start.setDate(start.getDate() + 1); start.setHours(0, 0, 0, 0);
   const end = new Date(start); end.setDate(end.getDate() + 1);
   const evs = [];
   visibleCalendars_().forEach(c => {
@@ -356,13 +374,44 @@ function buildDigest_() {
     shared.slice(0, 10).forEach(t => lines.push('  · ' + t.title + (t.author ? ' — ' + t.author : '')));
   }
   lines.push('', 'לפני שסוגרים את היום: מה נסגר, ואיפה עצרת בכל כובע?');
-  return lines.join('
-');
+  return lines.join('\n');
+}
+
+// תצוגה מקדימה, ואפשרות לירות התראת ניסיון כדי לראות אותה בטלפון עכשיו.
+function digest_(b) {
+  const out = { text: buildDigest_(), config: digestConfig_() };
+  if (b && b.fire) { dailyDigest(); out.fired = true; }
+  return out;
+}
+const DIGEST_TITLE = 'הלוז של מחר';
+
+// ערוץ ההתראה: אירוע קצר ביומן האישי, התקציר בתיאור, תזכורת קופצת ברגע האירוע.
+// זו הדרך היחידה להשיג צלצול בטלפון בשעה מדויקת בלי תשתית פוש.
+function postDigestEvent_(hour) {
+  const cal = CalendarApp.getDefaultCalendar();
+  const at = nextAt_(hour);
+  const end = new Date(at.getTime() + 15 * 60000);
+  // מנקים אירוע קודם של אותו יום, כדי שלא יצטברו כפילויות
+  const dayStart = new Date(at); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+  cal.getEvents(dayStart, dayEnd).forEach(ev => { if (ev.getTitle() === DIGEST_TITLE) ev.deleteEvent(); });
+
+  const url = PROPS.getProperty('APP_URL') || '';
+  const link = url ? ['',
+    'לפתיחה בעוזר, עם העתקה ושיתוף:',
+    url + '?digest=1'].join('\n') : '';
+  const body = buildDigest_(at) + link;
+  const ev = cal.createEvent(DIGEST_TITLE, at, end, { description: body });
+  ev.removeAllReminders();
+  ev.addPopupReminder(0);
+  log_('digest', 'נוצרה התראה ביומן ל־' + Utilities.formatDate(at, TZ, 'dd/MM HH:mm'), ev.getId(), cal.getId());
+  return ev.getId();
 }
 
 function dailyDigest() {
   const cfg = digestConfig_();
   if (cfg.channel === 'off') return;
+  if (cfg.channel === 'notify') { postDigestEvent_(cfg.hour); return; }
   const body = buildDigest_();
   const subject = 'העוזר — הלוז של מחר';
   const to = selfEmail_();
