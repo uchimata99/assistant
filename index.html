@@ -266,7 +266,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 
         <label for="remind">תזכורת ביומן על כל פגישה שנקבעת</label>
         <select id="remind">
-          <option value="">בלי תזכורת</option>
+          <option value="">בלי תזכורת בכלל</option>
           <option value="10">עשר דקות לפני</option>
           <option value="30">חצי שעה לפני</option>
           <option value="60">שעה לפני</option>
@@ -889,7 +889,8 @@ $('digesttest').addEventListener('click',async()=>{
     await api('setDigest',{channel:$('digestch').value,hour:+$('digesth').value,appUrl:location.origin+location.pathname});
     const r=await api('digest',{fire:true});
     const ch=$('digestch').value;
-    $('digeststat').textContent=ch==='notify'?'נוצר אירוע ביומן. התזכורת תצלצל בשעה שבחרת.':ch==='email'?'נשלח אליך עכשיו.':ch==='draft'?"נשמרה טיוטה בג'ימייל.":'הערוץ כבוי.';
+    $('digeststat').textContent=ch==='notify'?('נוצר אירוע ניסיון ביומן. התזכורת תצלצל ב־'+(r.firedAt||'עוד כשתי דקות')+'. מהערב זה יקרה בשעה שבחרת.')
+      :ch==='email'?'נשלח אליך עכשיו.':ch==='draft'?"נשמרה טיוטה בג'ימייל.":'הערוץ כבוי.';
     addLog('נשלחה התראת ניסיון של תקציר הערב',{by:'באישורך'});
   }catch(err){$('digeststat').textContent='נכשל: '+err.message;}
 });

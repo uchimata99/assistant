@@ -99,9 +99,9 @@ function createEvent_(b) {
   return { ok: true, id: ev.getId(), calendarId: cal.getId() };
 }
 function applyReminders_(ev, mins) {
-  const list = Array.isArray(mins) ? mins : [];
-  if (!list.length) return;
-  ev.removeAllReminders();
+  if (!Array.isArray(mins)) return;   // השדה לא נשלח כלל — משאירים את ברירת המחדל של היומן
+  const list = mins;
+  ev.removeAllReminders();            // נשלחה רשימה ריקה = בלי תזכורת, וזה מה שקורה
   // גוגל מקבל עד חמש תזכורות, וכל אחת עד ארבעה שבועות מראש.
   list.map(Number).filter(m => !isNaN(m) && m >= 0 && m <= 40320).slice(0, 5)
       .forEach(m => ev.addPopupReminder(m));
@@ -380,21 +380,33 @@ function buildDigest_(ref) {
 // תצוגה מקדימה, ואפשרות לירות התראת ניסיון כדי לראות אותה בטלפון עכשיו.
 function digest_(b) {
   const out = { text: buildDigest_(), config: digestConfig_() };
-  if (b && b.fire) { dailyDigest(); out.fired = true; }
+  if (b && b.fire) {
+    // ניסיון = עכשיו, לא בשעה שהוגדרה. אחרת הכפתור מבטיח דבר אחד ועושה אחר.
+    if (out.config.channel === 'notify') {
+      const at = new Date(Date.now() + 2 * 60000); at.setSeconds(0, 0);
+      postDigestEvent_(at);
+      out.firedAt = Utilities.formatDate(at, TZ, 'HH:mm');
+    } else {
+      dailyDigest();
+    }
+    out.fired = true;
+  }
   return out;
 }
 const DIGEST_TITLE = 'הלוז של מחר';
 
 // ערוץ ההתראה: אירוע קצר ביומן האישי, התקציר בתיאור, תזכורת קופצת ברגע האירוע.
 // זו הדרך היחידה להשיג צלצול בטלפון בשעה מדויקת בלי תשתית פוש.
-function postDigestEvent_(hour) {
+function postDigestEvent_(at) {
   const cal = CalendarApp.getDefaultCalendar();
-  const at = nextAt_(hour);
   const end = new Date(at.getTime() + 15 * 60000);
-  // מנקים אירוע קודם של אותו יום, כדי שלא יצטברו כפילויות
-  const dayStart = new Date(at); dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
-  cal.getEvents(dayStart, dayEnd).forEach(ev => { if (ev.getTitle() === DIGEST_TITLE) ev.deleteEvent(); });
+  // מוחקים רק את האירוע שאנחנו יצרנו, לפי מזהה שנשמר — אף פעם לא לפי כותרת.
+  // מחיקה לפי שם הייתה מוחקת גם אירוע אמיתי של המשתמש שבמקרה נקרא כך.
+  const prev = PROPS.getProperty('DIGEST_EVENT_ID');
+  if (prev) {
+    try { const old = cal.getEventById(prev); if (old) old.deleteEvent(); } catch (e) {}
+    PROPS.deleteProperty('DIGEST_EVENT_ID');
+  }
 
   const url = PROPS.getProperty('APP_URL') || '';
   const link = url ? ['',
@@ -404,6 +416,7 @@ function postDigestEvent_(hour) {
   const ev = cal.createEvent(DIGEST_TITLE, at, end, { description: body });
   ev.removeAllReminders();
   ev.addPopupReminder(0);
+  PROPS.setProperty('DIGEST_EVENT_ID', ev.getId());
   log_('digest', 'נוצרה התראה ביומן ל־' + Utilities.formatDate(at, TZ, 'dd/MM HH:mm'), ev.getId(), cal.getId());
   return ev.getId();
 }
@@ -411,7 +424,7 @@ function postDigestEvent_(hour) {
 function dailyDigest() {
   const cfg = digestConfig_();
   if (cfg.channel === 'off') return;
-  if (cfg.channel === 'notify') { postDigestEvent_(cfg.hour); return; }
+  if (cfg.channel === 'notify') { postDigestEvent_(nextAt_(cfg.hour)); return; }
   const body = buildDigest_();
   const subject = 'העוזר — הלוז של מחר';
   const to = selfEmail_();
