@@ -26,7 +26,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #3A6EA5;outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-header{padding:18px 18px 6px;display:flex;align-items:baseline;justify-content:space-between}
+header{padding:14px 14px 6px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hend{display:flex;align-items:center;gap:8px}
+.hnav{display:flex;gap:2px;flex:none}
+.hib{width:44px;height:44px;border-radius:999px;display:grid;place-items:center;color:var(--ink-2)}
+.hib svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.hib[aria-selected="true"]{background:var(--ink);color:var(--card)}
 header h1{font-family:var(--font-head);font-weight:700;font-size:30px;margin:0;line-height:1.1}
 header .date{color:var(--ink-2);font-size:15px;text-align:end}
 header .date b{display:block;color:var(--ink);font-weight:600}
@@ -219,15 +224,19 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 
 <header>
   <h1 id="greet">עכשיו</h1>
-  <div class="date"><b id="mename"></b><span id="today"></span></div>
+  <div class="hend">
+    <div class="date"><b id="mename"></b><span id="today"></span></div>
+    <div class="hnav">
+      <button role="tab" class="hib" data-tab="log" aria-selected="false" aria-label="מה העוזר עשה"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></button>
+      <button role="tab" class="hib" data-tab="settings" aria-selected="false" aria-label="הגדרות"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2.2"/><circle cx="15" cy="12" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg></button>
+    </div>
+  </div>
 </header>
 
 <nav class="tabs" role="tablist">
   <button role="tab" aria-selected="true" data-tab="now">היום</button>
   <button role="tab" aria-selected="false" data-tab="week">השבוע</button>
   <button role="tab" aria-selected="false" data-tab="month">החודש</button>
-  <button role="tab" aria-selected="false" data-tab="log">מה העוזר עשה</button>
-  <button role="tab" aria-selected="false" data-tab="settings">הגדרות</button>
 </nav>
 
 <div class="filter" id="filter"></div>
@@ -943,8 +952,8 @@ $('msgs').addEventListener('click',e=>{
   if(b.dataset.act==='approve') approve(id,el);
   else{el.classList.add('done');el.querySelector('.status:not(.dest)').textContent='נדחה';addLog('נדחתה הצעה: '+describe(S.pending[id]).title);delete S.pending[id];}
 });
-document.querySelectorAll('nav.tabs button').forEach(b=>b.addEventListener('click',()=>{
-  document.querySelectorAll('nav.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+document.querySelectorAll('[role=tab]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[role=tab]').forEach(x=>x.setAttribute('aria-selected',x===b));
   document.querySelectorAll('main section').forEach(s=>s.hidden=s.id!=='tab-'+b.dataset.tab);
   $('filter').style.display=['now','week','month'].includes(b.dataset.tab)?'':'none';
   if(b.dataset.tab==='settings') renderSettings();
@@ -1076,7 +1085,7 @@ function applyProfile(key){
   const p=PROFILES[key]; if(!p) return;
   S.cfg.profile=key; S.cfg.me=p.me; S.cfg.gender=p.gender; S.cfg.hats=JSON.parse(JSON.stringify(p.hats)); S.cfg.days=p.days.slice(); save('cfg',S.cfg);
 }
-function openSettings(){ const b=document.querySelector('nav.tabs button[data-tab="settings"]'); if(b) b.click(); }
+function openSettings(){ const b=document.querySelector('[role=tab][data-tab="settings"]'); if(b) b.click(); }
 $('who').addEventListener('click',e=>{const b=e.target.closest('button[data-p]');if(!b)return;applyProfile(b.dataset.p);$('who').hidden=true;renderAll();openSettings();toast('נתחיל בהגדרות: השם שלך, הכובעים, והילדים.');});
 
 /* ===================== התחלה ===================== */
