@@ -1017,9 +1017,10 @@ function openSheet(){ $('sheet').setAttribute('aria-hidden','false'); }
 function closeSheet(){ $('sheet').setAttribute('aria-hidden','true'); }
 async function showDigest(){
   openSheet(); $('sheettext').textContent='קורא מהשרת...';
-  if(demo()){ digestText=demoDigest(); $('sheettext').textContent=digestText; return; }
-  try{ const r=await api('digest'); digestText=r.text||''; $('sheettext').textContent=digestText||'אין מה להציג.'; }
-  catch(err){ digestText=''; $('sheettext').textContent='לא הצלחתי לקרוא: '+err.message; }
+  const put=t=>{ digestText=t||''; $('sheettext').textContent = (t&&t.trim()) ? t : 'אין מה להציג ללוז של מחר.'; };
+  if(demo()){ put(demoDigest()); return; }
+  try{ const r=await api('digest'); put(r.text); }
+  catch(err){ digestText=''; $('sheettext').textContent='לא הצלחתי לקרוא מהשרת: '+(err.message||'')+String.fromCharCode(10,10)+'בדקו חיבור בהגדרות, או סגרו את החלון הזה.'; }
 }
 function demoDigest(){
   const t=new Date(); t.setDate(t.getDate()+1);
@@ -1036,6 +1037,8 @@ function demoDigest(){
 }
 $('showdigest').addEventListener('click',showDigest);
 $('closesheet').addEventListener('click',closeSheet);
+// יציאה גם במקש חזרה, כדי שלא ייווצר תחושת נעילה
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeSheet(); closeChat&&closeChat(); } });
 $('copydigest').addEventListener('click',async()=>{
   if(!digestText) return;
   try{ await navigator.clipboard.writeText(digestText); toast('הועתק.'); }
@@ -1257,7 +1260,12 @@ $('who').addEventListener('click',e=>{const b=e.target.closest('button[data-p]')
 if(!S.cfg.profile||!S.cfg.hats.length) $('who').hidden=false;
 renderAll(); setupSpeech(); loadAgenda(); loadTasks(); pickupShared();
 // הקישור בתיאור אירוע ההתראה נכנס ישר למסך הלוז
-if(new URLSearchParams(location.search).has('digest')) showDigest();
+// הקישור מאירוע ההתראה מגיע עם digest בכתובת. מסירים אותו מיד אחרי הפתיחה,
+// אחרת כל טעינה מחדש פותחת שוב את הדף והמשתמש נעול בו.
+if(new URLSearchParams(location.search).has('digest')){
+  try{ const u=new URL(location.href); u.searchParams.delete('digest'); history.replaceState(null,'',u); }catch(e){}
+  showDigest();
+}
 setInterval(()=>{renderHeader();renderNow();renderDayRail();},60000);
 // בלי זה מטלה שבן או בת הזוג הוסיפו לא מופיעה עד רענון של הדף
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ loadAgenda(); loadTasks(); if(logSrc==='server') loadServerLog(); } });
