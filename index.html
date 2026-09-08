@@ -633,7 +633,9 @@ function renderTasks(){
   const rest=S.tasks.filter(t=>!t.mit&&(!t.done||t.done===today)&&passFilter(t.tags));
   renderFilter();
   $('mits').innerHTML=mits.length?mits.map(taskRow).join(''):`<div class="empty"><b>עדיין לא נבחרו</b>${T().mitsEmpty}</div>`;
-  $('tasks').innerHTML=rest.length?rest.map(taskRow).join(''):`<div class="empty"><b>ריק</b>${T().tasksEmpty}</div>`;
+  $('tasks').innerHTML=rest.length?rest.map(taskRow).join('')
+    :(S.syncErr?`<div class="empty"><b>לא הצלחתי לקרוא מהשרת</b>${esc(S.syncErr)}. מה שמוצג הוא מה ששמור במכשיר. בדקו חיבור בהגדרות.</div>`
+              :`<div class="empty"><b>אין מטלות פתוחות</b>${T().tasksEmpty}</div>`);
 }
 function renderFilter(){
   $('filter').innerHTML=!S.cfg.tags.length?'':`<button data-tag="" aria-pressed="${!filterTag}">הכל</button>`+S.cfg.tags.map(t=>`<button data-tag="${t.key}" aria-pressed="${filterTag===t.key}" style="--tag:${t.color}"><i></i>${esc(t.name)}</button>`).join('');
@@ -743,9 +745,9 @@ async function loadTasks(){
     // מה שעוד לא הגיע לשרת לא נמחק מהמכשיר בטעינה
     const pendingLocal=S.tasks.filter(t=>t.synced===false&&!ids.has(String(t.id)));
     S.tasks=fromServer.concat(pendingLocal);
-    save('tasks',S.tasks); renderTasks();
+    S.syncErr=''; save('tasks',S.tasks); renderTasks();
     if(pendingLocal.length) retrySync();
-  }catch(err){ /* נשארים עם המטמון המקומי */ }
+  }catch(err){ S.syncErr=err.message||'השרת לא ענה'; renderTasks(); }
 }
 async function retrySync(){
   let changed=false;
