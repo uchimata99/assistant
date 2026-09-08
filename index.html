@@ -154,6 +154,8 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 .form input.ltr{direction:ltr;text-align:left}
 .form .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .form .note{color:var(--ink-2);font-size:14px;margin-top:6px}
+details>summary{padding:12px 16px;cursor:pointer;font-weight:600;color:var(--ink-2)}
+details[open]>summary{border-bottom:1px solid var(--line)}
 .btn{display:inline-block;padding:11px 18px;border-radius:10px;background:var(--ink);color:#fff;font-weight:700;margin-top:14px}
 .btn.ghost{background:var(--paper);color:var(--ink)}
 .status{font-size:14px;color:var(--ink-2);margin-top:8px}
@@ -231,6 +233,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
   </section>
 
   <section id="tab-settings" hidden>
+    <h2>ההגדרות שלי</h2>
     <div class="card">
       <div class="form">
         <label for="me">מי משתמש במכשיר הזה</label>
@@ -238,16 +241,6 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
           <input id="me" type="text" placeholder="שם">
           <select id="gender"><option value="m">פנייה בלשון זכר</option><option value="f">פנייה בלשון נקבה</option></select>
         </div>
-
-        <label for="url">כתובת השרת</label>
-        <input id="url" class="ltr" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
-        <div class="note">כשהשדה ריק האפליקציה עובדת במצב הדגמה עם נתונים לדוגמה.</div>
-
-        <label for="secret">סוד</label>
-        <input id="secret" class="ltr" type="password" placeholder="הערך של APP_SECRET" autocomplete="off">
-        <div class="note">הפריסה באפס סקריפט פתוחה לכל מי שמכיר את הכתובת. הסוד סוגר אותה. הערך מודפס ביומן ההרצה של setup, ומוקלד כאן בכל מכשיר.</div>
-        <button class="btn ghost" id="test">בדיקת חיבור</button>
-        <div class="status" id="connstat"></div>
 
         <label for="famcal">יומן משפחתי משותף</label>
         <select id="famcal"></select>
@@ -263,7 +256,12 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 
         <label>לאיזה כובע שייך כל יום</label>
         <div class="daysel" id="daysel"></div>
+      </div>
+    </div>
 
+    <h2>איך העוזר מתנהג</h2>
+    <div class="card">
+      <div class="form">
         <label for="remind">תזכורת ביומן על כל פגישה שנקבעת</label>
         <select id="remind">
           <option value="">בלי תזכורת בכלל</option>
@@ -284,6 +282,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
         <select id="digesth"></select>
         <div class="note">רץ בשרת בשעה שנקבעה, ומרכז את אירועי המחר, המטלות המהותיות, מה שעבר תאריך ומה שפתוח במשותף.</div>
         <div class="note"><b>התראה בטלפון:</b> נוצר אירוע קצר ביומן האישי בשעה שבחרת, התקציר בתיאור שלו, ותזכורת קופצת ברגע האירוע. יומן גוגל מצלצל, לחיצה פותחת את הטקסט, ומשם העתקה ושיתוף. <b>דואר אליי</b> נשלח אך ורק לכתובת של בעל הסקריפט.</div>
+        <div class="note">הטריגר בגוגל נוצר רק בלחיצה על "החל". עד אז התקציר לא ירוץ, גם אם נבחר ערוץ.</div>
         <button class="btn ghost" id="digestsave">החל וקבל תצוגה מקדימה</button>
         <button class="btn ghost" id="digesttest">שלח התראת ניסיון עכשיו</button>
         <div class="status" id="digeststat"></div>
@@ -293,7 +292,29 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 
         <label for="voicelang">שפת הדיבור</label>
         <select id="voicelang"><option value="he-IL" selected>עברית</option><option value="en-US">אנגלית</option></select>
+      </div>
+    </div>
 
+    <h2>חיבור לשרת</h2>
+    <div class="card">
+      <details id="conn">
+        <summary>כתובת השרת והסוד — הקמה חד־פעמית בכל מכשיר</summary>
+        <div class="form">
+          <label for="url">כתובת השרת</label>
+          <input id="url" class="ltr" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+          <div class="note">כשהשדה ריק האפליקציה עובדת במצב הדגמה עם נתונים לדוגמה.</div>
+
+          <label for="secret">סוד</label>
+          <input id="secret" class="ltr" type="password" placeholder="הערך של APP_SECRET" autocomplete="off">
+          <div class="note">הפריסה באפס סקריפט פתוחה לכל מי שמכיר את הכתובת. הסוד סוגר אותה. הערך מודפס ביומן ההרצה של setup, ומוקלד כאן בכל מכשיר.</div>
+          <button class="btn ghost" id="test">בדיקת חיבור</button>
+          <div class="status" id="connstat"></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="form">
         <button class="btn" id="save">שמור הגדרות</button>
         <div class="status" id="savestat"></div>
       </div>
@@ -608,6 +629,7 @@ function renderSettings(){
   $('secret').value=S.cfg.secret||''; $('remind').value=S.cfg.remind||'';
   $('digesth').innerHTML=Array.from({length:24},(_,h)=>`<option value="${h}" ${h===+S.cfg.digestHour?'selected':''}>${pad(h)}:00</option>`).join('');
   $('digestch').value=S.cfg.digestChannel||'off';
+  $('conn').open=!S.cfg.url;
   renderTags();
   $('hats').innerHTML=S.cfg.hats.map((h,i)=>`<div class="hatrow"><input type="color" class="sw" value="${h.color}" aria-label="צבע"><input type="text" value="${esc(h.name)}" data-f="name" aria-label="שם"><input type="text" value="${esc(h.kw.join(', '))}" data-f="kw" placeholder="מילות מפתח" aria-label="מילות מפתח"></div>`).join('');
   $('daysel').innerHTML=S.cfg.days.map((k,i)=>`<div><span>${HE_DAYS_SHORT[i]}</span><select data-d="${i}">${[...S.cfg.hats,{key:'other',name:'—'}].map(h=>`<option value="${h.key}" ${h.key===k?'selected':''}>${esc(h.name)}</option>`).join('')}</select></div>`).join('');
