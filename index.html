@@ -349,19 +349,19 @@ details[open]>summary{border-bottom:1px solid var(--line)}
       </details>
     </div>
 
+    <div class="card">
+      <div class="form">
+        <button class="btn" id="save">שמור הגדרות</button>
+        <div class="status" id="savestat"></div>
+      </div>
+    </div>
+
     <h2>התקנה למסך הבית</h2>
     <div class="card">
       <div class="form">
         <button class="btn ghost" id="install">התקן את האפליקציה</button>
         <div class="status" id="installstat"></div>
         <div class="note">התקנה נותנת אייקון משלה ופתיחה במסך מלא, בלי שורת הכתובת של הדפדפן. אם הכפתור אינו זמין, הכיתוב שמעליו מסביר מה חסר.</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="form">
-        <button class="btn" id="save">שמור הגדרות</button>
-        <div class="status" id="savestat"></div>
       </div>
     </div>
   </section>
@@ -1060,7 +1060,7 @@ $('save').addEventListener('click',()=>{
   document.querySelectorAll('#hats .hatrow').forEach((row,i)=>{const h=S.cfg.hats[i];h.color=row.dataset.color||h.color;h.name=row.querySelector('[data-f=name]').value.trim()||h.name;h.kw=row.querySelector('[data-f=kw]').value.split(',').map(s=>s.trim()).filter(Boolean);});
   document.querySelectorAll('#daysel select').forEach(s=>S.cfg.days[+s.dataset.d]=s.value);
   S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
-  save('cfg',S.cfg); $('savestat').textContent='נשמר.'; renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
+  save('cfg',S.cfg); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
 });
 $('hats').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
@@ -1107,6 +1107,7 @@ $('test').addEventListener('click',async()=>{
     const j=await post(url,{action:'ping',secret:$('secret').value.trim()},20000);
     if(j.secretRequired){$('connstat').textContent='השרת מוגן והסוד לא תואם. העתיקו את APP_SECRET מיומן ההרצה של setup.';return;}
     if(!j.ok){$('connstat').textContent='השרת ענה אבל לא כמו שצריך'+(j.error?': '+j.error:'.');return;}
+    S.cfg.url=url; S.cfg.secret=$('secret').value.trim(); save('cfg',S.cfg); renderHint();
     if(j.calendars){S.cfg.calendars=j.calendars;save('cfg',S.cfg);renderTags();}
     loadPalette();
     if(j.digest){S.cfg.digestChannel=j.digest.channel;S.cfg.digestHour=j.digest.hour;save('cfg',S.cfg);$('digestch').value=j.digest.channel;$('digesth').value=j.digest.hour;}
@@ -1114,6 +1115,8 @@ $('test').addEventListener('click',async()=>{
     $('connstat').textContent=['מחובר','יומנים: '+((j.calendars||[]).length),j.model?'מנוע: '+j.model:'',
       j.sharedSheet?'רשימה משותפת: כן':'רשימה משותפת: לא מוגדרת',
       j.secured?'מוגן בסוד':'לא מוגן — כל מי שמכיר את הכתובת יכול לכתוב',d].filter(Boolean).join(' · ');
+    toast('מחובר. הכתובת והסוד נשמרו במכשיר.');
+    loadAgenda(); loadTasks();
   }catch(err){$('connstat').textContent='לא מחובר: '+err.message;}
 });
 
