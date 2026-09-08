@@ -503,7 +503,7 @@ async function renderInstall(){
   }catch(e){ why.push('לא הצלחתי לקרוא את המניפסט'); }
   st.textContent = why.length
     ? 'לא ניתן להתקין: '+why.join(' · ')
-    : 'כל התנאים מתקיימים, אבל הדפדפן עוד לא הציע התקנה. בכרום באנדרואיד: תפריט ⋮ ואז "התקנת אפליקציה". בספארי באייפון: שיתוף ואז "הוספה למסך הבית". בדפדפנים אחרים ייתכן שאין תמיכה.';
+    : 'כל התנאים מתקיימים. כרום באנדרואיד מציע התקנה רק אחרי שימוש קצר באתר — נגיעה במסך וכחצי דקה שהייה. השתמשו באפליקציה רגע, והכרזה תופיע מעצמה בראש המסך. אפשר גם ידנית: תפריט ⋮ ואז "התקנת אפליקציה". באייפון: שיתוף ואז "הוספה למסך הבית".';
 }
 
 // אוסף את כל מה שקובע אם אפשר להתקין, כדי שאפשר יהיה להדביק את זה בשיחה
@@ -534,6 +534,9 @@ $('diag').addEventListener('click', async ()=>{
        d.push('תצוגה: '+m.display+' · התחלה: '+m.start_url); }
   catch(e){ d.push('מניפסט: לא נקרא'); }
   if(navigator.getInstalledRelatedApps){ try{ d.push('אפליקציות קשורות מותקנות: '+(await navigator.getInstalledRelatedApps()).length); }catch(e){} }
+  try{ const c=await caches.match('./index.html'), r=await caches.match('./');
+       d.push('דף הפתיחה שמור למצב לא מקוון: '+((c||r)?'כן':'לא')); }
+  catch(e){ d.push('דף הפתיחה שמור למצב לא מקוון: לא ידוע'); }
   d.push('גרסת הדף: '+document.lastModified);
   d.push('מצב במסך: '+$('installstat').textContent);
   const txt=d.join(String.fromCharCode(10));
