@@ -373,6 +373,7 @@ details[open]>summary{border-bottom:1px solid var(--line)}
         <button class="btn ghost" id="install">התקן את האפליקציה</button>
         <button class="btn ghost" id="diag">העתק אבחון התקנה</button>
         <div class="status" id="installstat"></div>
+        <div class="note">גרסת הדף במכשיר הזה: <b id="buildstamp"></b></div>
         <div class="note">התקנה נותנת אייקון משלה ופתיחה במסך מלא, בלי שורת הכתובת של הדפדפן. אם הכפתור אינו זמין, הכיתוב שמעליו מסביר מה חסר.</div>
       </div>
     </div>
@@ -480,6 +481,7 @@ window.addEventListener('appinstalled', ()=>{ installEvent=null; renderInstall()
 function standalone(){ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }
 
 async function renderInstall(){
+  if($('buildstamp')) $('buildstamp').textContent=document.lastModified;
   // הכרזה חיה בכל המסכים, ולא רק בתחתית ההגדרות
   const ban=$('ibanner');
   if(ban) ban.hidden = !(installEvent && !standalone() && localStorage.getItem('assist:noinstall')!=='1');
@@ -532,6 +534,7 @@ $('diag').addEventListener('click', async ()=>{
        d.push('תצוגה: '+m.display+' · התחלה: '+m.start_url); }
   catch(e){ d.push('מניפסט: לא נקרא'); }
   if(navigator.getInstalledRelatedApps){ try{ d.push('אפליקציות קשורות מותקנות: '+(await navigator.getInstalledRelatedApps()).length); }catch(e){} }
+  d.push('גרסת הדף: '+document.lastModified);
   d.push('מצב במסך: '+$('installstat').textContent);
   const txt=d.join(String.fromCharCode(10));
   try{ await navigator.clipboard.writeText(txt); toast('האבחון הועתק. הדביקו אותו בשיחה.'); }

@@ -51,7 +51,11 @@ self.addEventListener('fetch', event => {
   // קודם רשת, ואם אין — מהמטמון. כך גרסה חדשה נוחתת מיד, ובלי רשת האפליקציה עדיין עולה.
   event.respondWith((async () => {
     try {
-      const fresh = await fetch(req);
+      // בניווט עוקפים גם את מטמון ה-HTTP של הדפדפן. בלי זה גיטהאב פייג'ס
+      // מגיש דף ישן עד עשר דקות, וגרסה חדשה לא מגיעה למכשיר.
+      const fresh = req.mode === 'navigate'
+        ? await fetch(new Request(req.url, { cache: 'reload', credentials: 'same-origin' }))
+        : await fetch(req);
       if (fresh && fresh.status === 200 && fresh.type === 'basic') {
         const c = await caches.open(CACHE);
         c.put(req, fresh.clone());
