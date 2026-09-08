@@ -38,6 +38,7 @@ function doPost(e) {
       case 'ping':           return json_({ ok: true, calendars: calendars_(), model: model_(), sharedSheet: !!PROPS.getProperty('SHARED_SHEET_ID'), secured: !!secret, digest: digestConfig_() });
       case 'agenda':         return json_(agenda_(b.days || 35));
       case 'calendars':      return json_({ calendars: calendars_() });
+      case 'colors':         return json_(colors_());
       case 'createCalendar': return json_(createCalendar_(b));
       case 'createEvent':    return json_(createEvent_(b));
       case 'deleteEvent':    return json_(deleteEvent_(b.id, b.calendarId));
@@ -69,6 +70,20 @@ function calById_(id) {
   if (!c) throw new Error('היומן לא נמצא');
   return c;
 }
+// פלטת הצבעים של יומן גוגל. גוגל תומך רק בקבוצה סגורה של צבעים ומצמיד כל גוון אחר
+// לקרוב אליו, ולכן בורר צבע חופשי באפליקציה יוצר פער בין מה שנבחר למה שנראה ביומן.
+// נקרא ישירות מממשק היומן עם האסימון של הסקריפט, כדי שלא נחזיק עותק שעלול להתיישן.
+function colors_() {
+  const r = UrlFetchApp.fetch('https://www.googleapis.com/calendar/v3/colors', {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true,
+  });
+  if (r.getResponseCode() !== 200) throw new Error('לא הצלחתי לקרוא את פלטת הצבעים מגוגל (' + r.getResponseCode() + ')');
+  const cal = JSON.parse(r.getContentText()).calendar || {};
+  const list = Object.keys(cal).map(k => ({ id: k, bg: cal[k].background, fg: cal[k].foreground }));
+  return { colors: list };
+}
+
 function createCalendar_(b) {
   if (!b.name) throw new Error('חסר שם ליומן');
   const c = CalendarApp.createCalendar(b.name, { color: b.color || undefined, timeZone: TZ, selected: true });

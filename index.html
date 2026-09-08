@@ -164,6 +164,9 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 .tagrow .calrow{grid-column:1/-1;display:flex;gap:6px;align-items:center}
 .tagrow .calrow select{flex:1}
 .sw{width:22px;height:22px;border-radius:6px;padding:0;border:0}
+.pal{grid-column:1/-1;display:grid;grid-template-columns:repeat(8,1fr);gap:8px;padding:10px 2px 4px}
+.pal button{aspect-ratio:1;border-radius:50%;border:2px solid transparent;padding:0}
+.pal button[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 2px var(--card) inset}
 .mini{padding:8px 12px;border-radius:8px;background:var(--paper);font-weight:600;font-size:14px;white-space:nowrap}
 .mini.x{color:var(--ink-2);font-size:18px;padding:4px 10px}
 .daysel{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:6px}
@@ -612,17 +615,25 @@ function addLog(text,extra={}){ S.log.push({text,ts:Date.now(),when:new Date().t
 
 function calOptions(sel){ const cals=S.cfg.calendars||[]; return `<option value="">— ללא —</option>`+cals.map(c=>`<option value="${esc(c.id)}" ${c.id===sel?'selected':''}>${esc(c.name)}</option>`).join(''); }
 function renderTags(){
-  $('tags').innerHTML=S.cfg.tags.map((t,i)=>`<div class="tagrow" data-i="${i}">
-      <input type="color" class="sw" value="${t.color}" aria-label="צבע">
+  const pal=S.cfg.palette||[];
+  const swatch=(t)=>pal.length
+    ? `<button type="button" class="sw" data-act="pick" style="background:${t.color}" aria-label="צבע"></button>`
+    : `<input type="color" class="sw" value="${t.color}" aria-label="צבע">`;
+  const palHtml=(t)=>pal.length
+    ? `<div class="pal" hidden>${pal.map(c=>`<button type="button" class="psw" data-c="${c}" aria-pressed="${c.toLowerCase()===String(t.color).toLowerCase()}" style="background:${c}" aria-label="צבע ${c}"></button>`).join('')}</div>`
+    : '';
+  $('tags').innerHTML=S.cfg.tags.map((t,i)=>`<div class="tagrow" data-i="${i}" data-color="${t.color}">
+      ${swatch(t)}
       <input type="text" value="${esc(t.name)}" data-f="name" placeholder="שם" aria-label="שם">
       <input type="text" value="${esc(t.aliases.join(', '))}" data-f="aliases" placeholder="כינויים, בפסיקים" aria-label="כינויים">
+      ${palHtml(t)}
       <div class="calrow"><select data-f="cal" aria-label="יומן">${calOptions(t.calendarId)}</select>${t.calendarId?'':`<button class="mini" data-act="mkcal">צור יומן</button>`}<button class="mini x" data-act="deltag" aria-label="מחק">×</button></div>
     </div>`).join('')+`<button class="btn ghost" id="addtag">הוסף ילד</button>`;
   $('famcal').innerHTML=calOptions(S.cfg.familyCalendarId);
 }
 function readTagsFromForm(){
   return [...document.querySelectorAll('#tags .tagrow')].map((row,i)=>{const old=S.cfg.tags[i]||{};const name=row.querySelector('[data-f=name]').value.trim();
-    return {key:old.key||('t'+Date.now()+i),name:name||old.name||'ללא שם',color:row.querySelector('input[type=color]').value,aliases:row.querySelector('[data-f=aliases]').value.split(',').map(s=>s.trim()).filter(Boolean),calendarId:row.querySelector('[data-f=cal]').value};});
+    return {key:old.key||('t'+Date.now()+i),name:name||old.name||'ללא שם',color:row.dataset.color||(row.querySelector('input[type=color]')||{}).value||old.color||'#4986e7',aliases:row.querySelector('[data-f=aliases]').value.split(',').map(s=>s.trim()).filter(Boolean),calendarId:row.querySelector('[data-f=cal]').value};});
 }
 function renderSettings(){
   $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang;
@@ -923,11 +934,21 @@ $('save').addEventListener('click',()=>{
   document.querySelectorAll('#hats .hatrow').forEach((row,i)=>{const h=S.cfg.hats[i];h.color=row.querySelector('input[type=color]').value;h.name=row.querySelector('[data-f=name]').value.trim()||h.name;h.kw=row.querySelector('[data-f=kw]').value.split(',').map(s=>s.trim()).filter(Boolean);});
   document.querySelectorAll('#daysel select').forEach(s=>S.cfg.days[+s.dataset.d]=s.value);
   S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
-  save('cfg',S.cfg); $('savestat').textContent='נשמר.'; renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
+  save('cfg',S.cfg); $('savestat').textContent='נשמר.'; renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
 });
 $('tags').addEventListener('click',async e=>{
   const b=e.target.closest('button'); if(!b) return;
-  if(b.id==='addtag'){S.cfg.tags=readTagsFromForm();S.cfg.tags.push({key:'t'+Date.now(),name:'',aliases:[],color:'#6C8EAD',calendarId:''});renderTags();$('tags').querySelector('.tagrow:last-of-type [data-f=name]').focus();return;}
+  if(b.dataset.act==='pick'){ const pl=b.closest('.tagrow').querySelector('.pal'); if(pl) pl.hidden=!pl.hidden; return; }
+  if(b.classList.contains('psw')){
+    const r=b.closest('.tagrow'); r.dataset.color=b.dataset.c;
+    r.querySelector('.sw').style.background=b.dataset.c;
+    r.querySelectorAll('.psw').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));
+    r.querySelector('.pal').hidden=true;
+    S.cfg.tags=readTagsFromForm(); save('cfg',S.cfg); renderTasks(); return;
+  }
+  if(b.id==='addtag'){S.cfg.tags=readTagsFromForm();const used=S.cfg.tags.map(x=>String(x.color).toLowerCase());
+    const free=(S.cfg.palette||[]).find(c=>!used.includes(c.toLowerCase()));
+    S.cfg.tags.push({key:'t'+Date.now(),name:'',aliases:[],color:free||'#4986e7',calendarId:''});renderTags();$('tags').querySelector('.tagrow:last-of-type [data-f=name]').focus();return;}
   const row=b.closest('.tagrow'); const i=+row.dataset.i;
   if(b.dataset.act==='deltag'){S.cfg.tags=readTagsFromForm();const [t]=S.cfg.tags.splice(i,1);save('cfg',S.cfg);renderTags();renderTasks();toast('התג של '+(t.name||'')+' הוסר');return;}
   if(b.dataset.act==='mkcal'){
@@ -938,7 +959,7 @@ $('tags').addEventListener('click',async e=>{
 });
 $('mkfam').addEventListener('click',async e=>{
   e.target.textContent='יוצר...';
-  try{const r=await api('createCalendar',{name:'משפחה',color:'#C97B2A'});S.cfg.familyCalendarId=r.id;(S.cfg.calendars=S.cfg.calendars||[]).push({id:r.id,name:'משפחה'});save('cfg',S.cfg);renderTags();addLog('נוצר יומן משפחתי בגוגל');toast('נוצר יומן משפחה. עכשיו לשתף אותו מיומן גוגל עם החשבון השני.');}
+  try{const r=await api('createCalendar',{name:'משפחה',color:(S.cfg.palette||[]).includes('#ff7537')?'#ff7537':'#C97B2A'});S.cfg.familyCalendarId=r.id;(S.cfg.calendars=S.cfg.calendars||[]).push({id:r.id,name:'משפחה'});save('cfg',S.cfg);renderTags();addLog('נוצר יומן משפחתי בגוגל');toast('נוצר יומן משפחה. עכשיו לשתף אותו מיומן גוגל עם החשבון השני.');}
   catch(err){toast('לא נוצר: '+err.message);}
   e.target.textContent='צור יומן משפחה';
 });
@@ -950,6 +971,7 @@ $('test').addEventListener('click',async()=>{
     if(j.secretRequired){$('connstat').textContent='השרת מוגן והסוד לא תואם. העתיקו את APP_SECRET מיומן ההרצה של setup.';return;}
     if(!j.ok){$('connstat').textContent='השרת ענה אבל לא כמו שצריך'+(j.error?': '+j.error:'.');return;}
     if(j.calendars){S.cfg.calendars=j.calendars;save('cfg',S.cfg);renderTags();}
+    loadPalette();
     if(j.digest){S.cfg.digestChannel=j.digest.channel;S.cfg.digestHour=j.digest.hour;save('cfg',S.cfg);$('digestch').value=j.digest.channel;$('digesth').value=j.digest.hour;}
     const d=j.digest&&j.digest.channel!=='off'&&j.digest.installed?'תקציר ערב: '+pad(j.digest.hour)+':00':'תקציר ערב: כבוי';
     $('connstat').textContent=['מחובר','יומנים: '+((j.calendars||[]).length),j.model?'מנוע: '+j.model:'',
@@ -990,7 +1012,17 @@ if(new URLSearchParams(location.search).has('digest')) showDigest();
 setInterval(()=>{renderHeader();renderNow();},60000);
 // בלי זה מטלה שבן או בת הזוג הוסיפו לא מופיעה עד רענון של הדף
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ loadAgenda(); loadTasks(); if(logSrc==='server') loadServerLog(); } });
-if(demo()) $('hint').textContent='מצב הדגמה — לחבר את השרת בהגדרות.';
+// הכיתוב נמחק ברגע שמתחברים. קודם הוא נקבע פעם אחת בטעינה ונשאר תקוע גם אחרי חיבור.
+// הפלטה נקראת מגוגל ולא נשמרת בקוד, כדי שלא תתיישן אם גוגל ישנה אותה.
+async function loadPalette(){
+  if(demo()) return;
+  try{ const r=await api('colors'); const list=(r.colors||[]).map(c=>c.bg).filter(Boolean);
+       if(list.length){ S.cfg.palette=list; save('cfg',S.cfg); renderTags(); } }
+  catch(err){ /* בלי פלטה נשארים עם הבורר החופשי */ }
+}
+function renderHint(){ $('hint').textContent = demo() ? 'מצב הדגמה — לחבר את השרת בהגדרות.' : ''; }
+renderHint();
+if(!demo()&&!(S.cfg.palette||[]).length) loadPalette();
 </script>
 </body>
 </html>
