@@ -14,8 +14,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --paper:#F2F4F5; --card:#FFFFFF; --ink:#1E2328; --ink-2:#5B6570; --line:#DCE1E6;
-  --other:#8A8F95; --warn:#C0392B; --ok:#1D6F42;
+  --paper:#F2F4F6; --card:#FFFFFF; --field:#E8EBEF;
+  --ink:#1D2228; --ink-2:#5C6671; --ink-3:#77818C;
+  --line:#DBE0E5; --line-2:#C4CBD4;
+  --on-ink:#FFFFFF; --other:#8A8F95;
+  --ok:#0C6439; --warn:#784700; --err:#942627;
   --r-card:14px;
   color-scheme:light dark;
   --font-body:'Assistant',system-ui,sans-serif; --font-head:'Frank Ruhl Libre',serif;
@@ -40,14 +43,14 @@ header .date b{display:block;color:var(--ink);font-weight:600}
 nav.tabs{display:flex;gap:4px;padding:8px 14px 4px;overflow-x:auto;scrollbar-width:none}
 nav.tabs::-webkit-scrollbar{display:none}
 nav.tabs button{padding:8px 14px;border-radius:999px;color:var(--ink-2);white-space:nowrap;font-weight:600}
-nav.tabs button[aria-selected="true"]{background:var(--ink);color:#fff}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--on-ink)}
 
 .filter{display:flex;gap:6px;padding:6px 14px 0;overflow-x:auto;scrollbar-width:none}
 .filter::-webkit-scrollbar{display:none}
 .filter:empty{display:none}
 .filter button{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--card);box-shadow:0 1px 0 var(--line);font-size:14px;color:var(--ink-2);white-space:nowrap}
 .filter button i{width:10px;height:10px;border-radius:50%;background:var(--tag)}
-.filter button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.filter button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
 
 .banner{margin:6px 14px 0;padding:14px 16px;border-radius:var(--r-card);background:var(--card);box-shadow:0 1px 0 var(--line);border-inline-start:7px solid var(--ok)}
 .banner[hidden]{display:none}
@@ -68,14 +71,17 @@ section[hidden]{display:none}
 
 @media (prefers-color-scheme: dark){
   :root{
-    --paper:#121417; --card:#1B1F24; --ink:#E7EAED; --ink-2:#9AA4AF; --line:#2C333A;
-    --other:#7A8189; --warn:#E2685A; --ok:#3E9E6B;
+    --paper:#101316; --card:#1D2126; --field:#292E34;
+    --ink:#E5E8EC; --ink-2:#9DA7B2; --ink-3:#7A848F;
+    --line:#2F363D; --line-2:#414951;
+    --on-ink:#101316; --other:#7A8189;
+    --ok:#78C594; --warn:#ECB668; --err:#EE8881;
   }
   .dot{background:var(--hat-d,var(--hat,var(--other)))}
   .ev{border-inline-start-color:var(--hat-d,var(--hat,var(--other)))}
   .now::before,.ev .bar i,.now .prog i{background:var(--hat-d,var(--hat,var(--other)))}
   .month .d .dots i{background:var(--hat-d,var(--hat))}
-  .month .d.hatday{background:color-mix(in srgb,var(--hat-d,var(--hat)) calc(8% + var(--load,0) * 4%),var(--card))}
+  .month .d.hatday{background:color-mix(in srgb,var(--ink) calc(4% + var(--load,0) * 4%),var(--card))}
   .tag{background:color-mix(in srgb,var(--ink) 8%,var(--card))}
 }
 h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8px}
@@ -91,7 +97,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 .task.done .t{text-decoration:line-through;color:var(--ink-2)}
 .task .s{color:var(--ink-2);font-size:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--hat,var(--other));vertical-align:middle;margin-inline-end:4px}
-.tag{display:inline-block;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;background:var(--paper);color:var(--ink);border:1px solid var(--line);margin-inline-start:6px;vertical-align:middle}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;background:var(--field);color:var(--ink);border:1px solid var(--line);margin-inline-start:6px;vertical-align:middle}
 .shared{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--ink-2)}
 .shared svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
 .empty{padding:22px 16px;color:var(--ink-2)}
@@ -116,13 +122,15 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 
 .month{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:12px}
 .month .dow{text-align:center;color:var(--ink-2);font-size:13px;padding-bottom:4px}
-.month .d{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;background:var(--paper)}
+.month .d{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;background:var(--field)}
 .month .d.today{outline:2px solid var(--ink)}
 .month .d.other{opacity:.35}
 .month .d .n{font-size:15px}
 .month .d .dots{display:flex;margin-top:4px;height:4px;width:62%;gap:2px}
 .month .d .dots i{flex:1;height:4px;border-radius:2px;background:var(--hat)}
-.month .d.hatday{background:color-mix(in srgb,var(--hat) calc(10% + var(--load,0) * 5%),var(--card))}
+/* העומס הוא סדר ולא קטגוריה, ולכן גוון ניטרלי. גוון צבעוני היה מוריד
+   את הנקודה שמעליו לניגודיות 2.35 — הסימן והרקע באותו ערוץ. */
+.month .d.hatday{background:color-mix(in srgb,var(--ink) calc(3% + var(--load,0) * 3%),var(--card))}
 
 .log{padding:12px 16px;border-bottom:1px solid var(--line);font-size:15px}
 .log:last-child{border-bottom:0}
@@ -142,7 +150,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 .chat .bar h3{margin:0;font-family:var(--font-head);font-weight:500;font-size:22px}
 .chat .msgs{flex:1;overflow-y:auto;padding:14px 14px 130px;display:flex;flex-direction:column;gap:10px}
 .msg{max-width:88%;padding:10px 14px;border-radius:16px;line-height:1.4;white-space:pre-wrap}
-.msg.me{align-self:flex-start;background:var(--ink);color:#fff;border-end-start-radius:4px}
+.msg.me{align-self:flex-start;background:var(--ink);color:var(--on-ink);border-end-start-radius:4px}
 .msg.me img{display:block;max-width:220px;border-radius:10px;margin-top:6px}
 .msg.ai{align-self:flex-end;background:var(--card);border-end-end-radius:4px;box-shadow:0 1px 0 var(--line)}
 .msg.sys{align-self:center;color:var(--ink-2);font-size:14px;background:none}
@@ -154,11 +162,11 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 .prop .why{margin-top:8px;font-size:14px;color:var(--ink-2);border-top:1px dashed var(--line);padding-top:8px}
 .prop .vis{display:flex;gap:6px;margin-top:10px}
 .prop .vis button{padding:6px 12px;border-radius:999px;background:var(--paper);font-size:14px;color:var(--ink-2);display:flex;align-items:center;gap:5px}
-.prop .vis button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.prop .vis button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
 .prop .vis svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
 .prop .acts{display:flex;gap:8px;margin-top:10px}
 .prop .acts button{flex:1;padding:10px;border-radius:10px;font-weight:700}
-.prop .yes{background:var(--ink);color:#fff}
+.prop .yes{background:var(--ink);color:var(--on-ink)}
 .prop .no{background:var(--paper);color:var(--ink-2)}
 .prop.done{opacity:.55}
 .prop.done .acts,.prop.done .vis{display:none}
@@ -169,28 +177,28 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 .attach:empty{display:none}
 .attach .th{position:relative;flex:none}
 .attach img{height:64px;border-radius:10px;display:block}
-.attach .rm{position:absolute;top:-6px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--ink);color:#fff;font-size:14px;line-height:22px;text-align:center}
+.attach .rm{position:absolute;top:-6px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--on-ink);font-size:14px;line-height:22px;text-align:center}
 .composer .box{display:flex;align-items:flex-end;gap:6px;background:var(--card);border-radius:22px;padding:6px 6px 6px 10px;box-shadow:0 2px 12px rgba(30,35,40,.12)}
 .composer textarea{flex:1;border:0;resize:none;background:none;font:inherit;max-height:120px;padding:9px 0;line-height:1.35;min-width:0}
 .composer textarea::placeholder{color:var(--ink-2)}
 .ib{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;flex:none}
 .ib svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .ib.mic,.ib.cam{color:var(--ink)}
-.ib.mic.on{background:var(--warn);color:#fff;animation:pulse 1.2s infinite}
+.ib.mic.on{background:var(--warn);color:var(--on-ink);animation:pulse 1.2s infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--warn) 45%,transparent)}50%{box-shadow:0 0 0 10px transparent}}
-.ib.send{background:var(--ink);color:#fff}
+.ib.send{background:var(--ink);color:var(--on-ink)}
 .ib.send:disabled{opacity:.35}
 .hint{text-align:center;color:var(--ink-2);font-size:13px;margin-top:6px;min-height:16px}
 
 .form{padding:6px 16px 14px}
 .form label{display:block;font-weight:600;margin:14px 0 4px}
-.form input,.form select,.form textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--card);direction:rtl}
+.form input,.form select,.form textarea{width:100%;padding:11px 12px;border:1px solid var(--line-2);border-radius:10px;font:inherit;background:var(--field);direction:rtl}
 .form input.ltr{direction:ltr;text-align:left}
 .form .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .form .note{color:var(--ink-2);font-size:14px;margin-top:6px}
 details>summary{padding:12px 16px;cursor:pointer;font-weight:600;color:var(--ink-2)}
 details[open]>summary{border-bottom:1px solid var(--line)}
-.btn{display:inline-block;padding:11px 18px;border-radius:10px;background:var(--ink);color:#fff;font-weight:700;margin-top:14px}
+.btn{display:inline-block;padding:11px 18px;border-radius:10px;background:var(--ink);color:var(--on-ink);font-weight:700;margin-top:14px}
 .btn.ghost{background:var(--paper);color:var(--ink)}
 .status{font-size:14px;color:var(--ink-2);margin-top:8px}
 .hatrow,.tagrow{display:grid;grid-template-columns:24px 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
@@ -207,7 +215,7 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 .daysel select{padding:8px 4px;font-size:14px}
 .daysel span{display:block;text-align:center;font-size:13px;color:var(--ink-2)}
 
-.toast{position:fixed;top:14px;inset-inline:14px;background:var(--ink);color:#fff;padding:12px 16px;border-radius:12px;z-index:60;text-align:center;opacity:0;transform:translateY(-8px);transition:.2s;pointer-events:none}
+.toast{position:fixed;top:14px;inset-inline:14px;background:var(--ink);color:var(--on-ink);padding:12px 16px;border-radius:12px;z-index:60;text-align:center;opacity:0;transform:translateY(-8px);transition:.2s;pointer-events:none}
 .toast.show{opacity:1;transform:none}
 .quick{display:flex;gap:8px;flex-wrap:wrap;margin:10px 2px 0}
 .quick button{padding:8px 12px;border-radius:999px;background:var(--card);box-shadow:0 1px 0 var(--line);font-size:15px}
@@ -555,7 +563,9 @@ const LOCK_ICON='<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="
 // צבע שנבחר ביומן גוגל לא בהכרח נראה על המשטח שלנו. נמדד שרוב הפלטה של גוגל
 // יורדת מתחת לסף הניגודיות על כרטיס בהיר — הצהוב מגיע ל-1.23 מול סף 3.
 // לכן כל צבע נכפה לתחום בטוח: מוכהה למצב הבהיר, ומואר למצב הכהה.
-const SURF_LIGHT='#FFFFFF', SURF_DARK='#1B1F24', CONTRAST_MIN=3;
+// מול המשטח המחמיר ביותר שעליו הסימן עשוי לשבת, ולא מול הכרטיס בלבד:
+// נמדד ש-11 מתוך 24 צבעי גוגל עברו את הסף על לבן ונכשלו על רקע הדף.
+const SURF_LIGHT='#F2F4F6', SURF_DARK='#101316', CONTRAST_MIN=3;
 function _rgb(h){ h=String(h||'').replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join('');
   const n=parseInt(h,16); return isNaN(n)?[138,143,149]:[(n>>16)&255,(n>>8)&255,n&255]; }
 function _lum(c){ const f=v=>{v/=255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);};
