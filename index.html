@@ -349,6 +349,15 @@ details[open]>summary{border-bottom:1px solid var(--line)}
       </details>
     </div>
 
+    <h2>התקנה למסך הבית</h2>
+    <div class="card">
+      <div class="form">
+        <button class="btn ghost" id="install">התקן את האפליקציה</button>
+        <div class="status" id="installstat"></div>
+        <div class="note">התקנה נותנת אייקון משלה ופתיחה במסך מלא, בלי שורת הכתובת של הדפדפן. אם הכפתור אינו זמין, הכיתוב שמעליו מסביר מה חסר.</div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="form">
         <button class="btn" id="save">שמור הגדרות</button>
@@ -446,7 +455,47 @@ const HE_MONTHS=['ינואר','פברואר','מרץ','אפריל','מאי','י�
 const $=id=>document.getElementById(id);
 // נרשם מוקדם ככל האפשר: יעד השיתוף מווטסאפ עובד רק דרך הסרוויס וורקר.
 // עד שהוא פעיל, POST אל ./share נוחת על 404 של גיטהאב — ולכן יש גם 404.html שמחזיר לאפליקציה.
-if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+let swError='';
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(e=>{ swError=String(e.message||e); }); }
+else { swError='הדפדפן הזה לא תומך בסרוויס וורקר'; }
+
+// כרום שולח את האירוע הזה רק כשכל תנאי ההתקנה מתקיימים. תופסים אותו מוקדם,
+// כי אם לא קוראים לו preventDefault הוא מתפוגג ואי אפשר להציע התקנה מאוחר יותר.
+let installEvent=null;
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); installEvent=e; renderInstall(); });
+window.addEventListener('appinstalled', ()=>{ installEvent=null; renderInstall(); });
+
+function standalone(){ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }
+
+async function renderInstall(){
+  const btn=$('install'), st=$('installstat');
+  if(!btn||!st) return;
+  if(standalone()){ btn.disabled=true; st.textContent='כבר מותקנת. את המסך הזה פתחת מתוך האפליקציה.'; return; }
+  if(installEvent){ btn.disabled=false; st.textContent='מוכן להתקנה.'; return; }
+  btn.disabled=true;
+  const why=[];
+  if(!window.isSecureContext) why.push('האתר לא מוגש בחיבור מאובטח');
+  if(swError) why.push('הסרוויס וורקר לא נרשם: '+swError);
+  else {
+    const reg = navigator.serviceWorker ? await navigator.serviceWorker.getRegistration() : null;
+    if(!reg||!reg.active) why.push('הסרוויס וורקר עדיין לא פעיל — רעננו פעם נוספת');
+  }
+  try{ const m=await (await fetch('manifest.json',{cache:'no-store'})).json();
+       const sizes=(m.icons||[]).map(i=>i.sizes);
+       if(!sizes.includes('192x192')||!sizes.includes('512x512')) why.push('חסרים אייקונים בגודל 192 ו-512');
+  }catch(e){ why.push('לא הצלחתי לקרוא את המניפסט'); }
+  st.textContent = why.length
+    ? 'לא ניתן להתקין: '+why.join(' · ')
+    : 'כל התנאים מתקיימים, אבל הדפדפן עוד לא הציע התקנה. בכרום באנדרואיד: תפריט ⋮ ואז "התקנת אפליקציה". בספארי באייפון: שיתוף ואז "הוספה למסך הבית". בדפדפנים אחרים ייתכן שאין תמיכה.';
+}
+
+$('install').addEventListener('click', async ()=>{
+  if(!installEvent) return;
+  installEvent.prompt();
+  const r=await installEvent.userChoice;
+  $('installstat').textContent = r.outcome==='accepted' ? 'מותקן.' : 'ההתקנה בוטלה.';
+  installEvent=null;
+});
 const pad=n=>String(n).padStart(2,'0');
 const hhmm=d=>pad(d.getHours())+':'+pad(d.getMinutes());
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -712,6 +761,7 @@ function readTagsFromForm(){
     return {key:old.key||('t'+Date.now()+i),name:name||old.name||'ללא שם',color:row.dataset.color||(row.querySelector('input[type=color]')||{}).value||old.color||'#4986e7',aliases:row.querySelector('[data-f=aliases]').value.split(',').map(s=>s.trim()).filter(Boolean),calendarId:row.querySelector('[data-f=cal]').value};});
 }
 function renderSettings(){
+  renderInstall();
   $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang;
   $('secret').value=S.cfg.secret||''; $('remind').value=S.cfg.remind||'';
   $('digesth').innerHTML=Array.from({length:24},(_,h)=>`<option value="${h}" ${h===+S.cfg.digestHour?'selected':''}>${pad(h)}:00</option>`).join('');
