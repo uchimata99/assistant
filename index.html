@@ -49,6 +49,12 @@ nav.tabs button[aria-selected="true"]{background:var(--ink);color:#fff}
 .filter button i{width:10px;height:10px;border-radius:50%;background:var(--tag)}
 .filter button[aria-pressed="true"]{background:var(--ink);color:#fff}
 
+.banner{margin:6px 14px 0;padding:14px 16px;border-radius:var(--r-card);background:var(--card);box-shadow:0 1px 0 var(--line);border-inline-start:7px solid var(--ok)}
+.banner[hidden]{display:none}
+.banner .btxt b{display:block;font-weight:600;margin-bottom:2px}
+.banner .btxt span{color:var(--ink-2);font-size:14px}
+.banner .bact{display:flex;gap:8px;margin-top:12px}
+.banner .bact .btn{flex:1;min-height:44px}
 main{padding:8px 14px}
 section[hidden]{display:none}
 
@@ -241,6 +247,11 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 </nav>
 
 <div class="filter" id="filter"></div>
+
+<div class="banner" id="ibanner" hidden>
+  <div class="btxt"><b>אפשר להתקין את העוזר כאפליקציה</b><span>אייקון משלו, פתיחה במסך מלא, בלי שורת כתובת.</span></div>
+  <div class="bact"><button class="btn" id="ibtn">התקן</button><button class="btn ghost" id="ilater">לא עכשיו</button></div>
+</div>
 
 <main>
   <section id="tab-now">
@@ -469,6 +480,9 @@ window.addEventListener('appinstalled', ()=>{ installEvent=null; renderInstall()
 function standalone(){ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }
 
 async function renderInstall(){
+  // הכרזה חיה בכל המסכים, ולא רק בתחתית ההגדרות
+  const ban=$('ibanner');
+  if(ban) ban.hidden = !(installEvent && !standalone() && localStorage.getItem('assist:noinstall')!=='1');
   const btn=$('install'), st=$('installstat');
   if(!btn||!st) return;
   if(standalone()){ btn.disabled=true; st.textContent='כבר מותקנת. את המסך הזה פתחת מתוך האפליקציה.'; return; }
@@ -492,6 +506,16 @@ async function renderInstall(){
 
 // אוסף את כל מה שקובע אם אפשר להתקין, כדי שאפשר יהיה להדביק את זה בשיחה
 // במקום להעתיק שורות מהמסך.
+async function doInstall(){
+  if(!installEvent) return;
+  installEvent.prompt();
+  const r=await installEvent.userChoice;
+  installEvent=null;
+  toast(r.outcome==='accepted' ? 'מותקן.' : 'ההתקנה בוטלה.');
+  renderInstall();
+}
+$('ibtn').addEventListener('click', doInstall);
+$('ilater').addEventListener('click', ()=>{ localStorage.setItem('assist:noinstall','1'); $('ibanner').hidden=true; });
 $('diag').addEventListener('click', async ()=>{
   const d=[];
   d.push('דפדפן: '+navigator.userAgent);
@@ -513,13 +537,7 @@ $('diag').addEventListener('click', async ()=>{
   try{ await navigator.clipboard.writeText(txt); toast('האבחון הועתק. הדביקו אותו בשיחה.'); }
   catch(e){ $('installstat').textContent=txt; toast('לא הצלחתי להעתיק — האבחון מוצג למטה.'); }
 });
-$('install').addEventListener('click', async ()=>{
-  if(!installEvent) return;
-  installEvent.prompt();
-  const r=await installEvent.userChoice;
-  $('installstat').textContent = r.outcome==='accepted' ? 'מותקן.' : 'ההתקנה בוטלה.';
-  installEvent=null;
-});
+$('install').addEventListener('click', doInstall);
 const pad=n=>String(n).padStart(2,'0');
 const hhmm=d=>pad(d.getHours())+':'+pad(d.getMinutes());
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -1186,6 +1204,7 @@ async function loadPalette(){
 }
 function renderHint(){ $('hint').textContent = demo() ? 'מצב הדגמה — לחבר את השרת בהגדרות.' : ''; }
 renderHint();
+renderInstall();
 if(!demo()&&!(S.cfg.palette||[]).length) loadPalette();
 </script>
 </body>
