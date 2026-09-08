@@ -360,6 +360,7 @@ details[open]>summary{border-bottom:1px solid var(--line)}
     <div class="card">
       <div class="form">
         <button class="btn ghost" id="install">התקן את האפליקציה</button>
+        <button class="btn ghost" id="diag">העתק אבחון התקנה</button>
         <div class="status" id="installstat"></div>
         <div class="note">התקנה נותנת אייקון משלה ופתיחה במסך מלא, בלי שורת הכתובת של הדפדפן. אם הכפתור אינו זמין, הכיתוב שמעליו מסביר מה חסר.</div>
       </div>
@@ -489,6 +490,29 @@ async function renderInstall(){
     : 'כל התנאים מתקיימים, אבל הדפדפן עוד לא הציע התקנה. בכרום באנדרואיד: תפריט ⋮ ואז "התקנת אפליקציה". בספארי באייפון: שיתוף ואז "הוספה למסך הבית". בדפדפנים אחרים ייתכן שאין תמיכה.';
 }
 
+// אוסף את כל מה שקובע אם אפשר להתקין, כדי שאפשר יהיה להדביק את זה בשיחה
+// במקום להעתיק שורות מהמסך.
+$('diag').addEventListener('click', async ()=>{
+  const d=[];
+  d.push('דפדפן: '+navigator.userAgent);
+  d.push('חיבור מאובטח: '+window.isSecureContext);
+  d.push('פתוח כאפליקציה: '+standalone());
+  d.push('אירוע התקנה התקבל: '+(installEvent?'כן':'לא'));
+  d.push('שגיאת סרוויס וורקר: '+(swError||'אין'));
+  try{ const reg=await navigator.serviceWorker.getRegistration();
+       d.push('סרוויס וורקר: '+(reg?((reg.active&&'פעיל')||(reg.installing&&'מותקן')||'ממתין')+' · תחום '+reg.scope:'לא רשום')); }
+  catch(e){ d.push('סרוויס וורקר: שגיאה '+e.message); }
+  try{ d.push('מטמונים: '+(await caches.keys()).join(', ')); }catch(e){ d.push('מטמונים: אין גישה'); }
+  try{ const m=await (await fetch('manifest.json',{cache:'no-store'})).json();
+       d.push('אייקונים: '+(m.icons||[]).map(i=>i.sizes).join(', '));
+       d.push('תצוגה: '+m.display+' · התחלה: '+m.start_url); }
+  catch(e){ d.push('מניפסט: לא נקרא'); }
+  if(navigator.getInstalledRelatedApps){ try{ d.push('אפליקציות קשורות מותקנות: '+(await navigator.getInstalledRelatedApps()).length); }catch(e){} }
+  d.push('מצב במסך: '+$('installstat').textContent);
+  const txt=d.join(String.fromCharCode(10));
+  try{ await navigator.clipboard.writeText(txt); toast('האבחון הועתק. הדביקו אותו בשיחה.'); }
+  catch(e){ $('installstat').textContent=txt; toast('לא הצלחתי להעתיק — האבחון מוצג למטה.'); }
+});
 $('install').addEventListener('click', async ()=>{
   if(!installEvent) return;
   installEvent.prompt();
