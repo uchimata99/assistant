@@ -71,10 +71,11 @@ section[hidden]{display:none}
     --paper:#121417; --card:#1B1F24; --ink:#E7EAED; --ink-2:#9AA4AF; --line:#2C333A;
     --other:#7A8189; --warn:#E2685A; --ok:#3E9E6B;
   }
-  .dot{background:color-mix(in srgb,var(--hat,var(--other)) 74%,white)}
-  .ev{border-inline-start-color:color-mix(in srgb,var(--hat,var(--other)) 74%,white)}
-  .now::before,.ev .bar i,.now .prog i{background:color-mix(in srgb,var(--hat,var(--other)) 74%,white)}
-  .month .d .dots i{background:color-mix(in srgb,var(--hat) 74%,white)}
+  .dot{background:var(--hat-d,var(--hat,var(--other)))}
+  .ev{border-inline-start-color:var(--hat-d,var(--hat,var(--other)))}
+  .now::before,.ev .bar i,.now .prog i{background:var(--hat-d,var(--hat,var(--other)))}
+  .month .d .dots i{background:var(--hat-d,var(--hat))}
+  .month .d.hatday{background:color-mix(in srgb,var(--hat-d,var(--hat)) calc(8% + var(--load,0) * 4%),var(--card))}
   .tag{background:color-mix(in srgb,var(--ink) 8%,var(--card))}
 }
 h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8px}
@@ -551,6 +552,30 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const SHARE_ICON='<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-5-6.3"/></svg>';
 const LOCK_ICON='<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 
+// צבע שנבחר ביומן גוגל לא בהכרח נראה על המשטח שלנו. נמדד שרוב הפלטה של גוגל
+// יורדת מתחת לסף הניגודיות על כרטיס בהיר — הצהוב מגיע ל-1.23 מול סף 3.
+// לכן כל צבע נכפה לתחום בטוח: מוכהה למצב הבהיר, ומואר למצב הכהה.
+const SURF_LIGHT='#FFFFFF', SURF_DARK='#1B1F24', CONTRAST_MIN=3;
+function _rgb(h){ h=String(h||'').replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join('');
+  const n=parseInt(h,16); return isNaN(n)?[138,143,149]:[(n>>16)&255,(n>>8)&255,n&255]; }
+function _lum(c){ const f=v=>{v/=255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);};
+  return 0.2126*f(c[0])+0.7152*f(c[1])+0.0722*f(c[2]); }
+function _ratio(a,b){ const l1=_lum(a),l2=_lum(b); return (Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05); }
+function _hex(c){ return '#'+c.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join(''); }
+function _toward(c,t,f){ return [c[0]+(t[0]-c[0])*f, c[1]+(t[1]-c[1])*f, c[2]+(t[2]-c[2])*f]; }
+function safeOn(color, surfaceHex){
+  const surf=_rgb(surfaceHex); let c=_rgb(color);
+  if(_ratio(c,surf)>=CONTRAST_MIN) return _hex(c);
+  // מתקדמים לכיוון שחור או לבן, לפי מה שמרחיק מהמשטח, עד שעוברים את הסף
+  const target = _lum(surf)>0.5 ? [0,0,0] : [255,255,255];
+  for(let f=0.05; f<=1.0001; f+=0.05){
+    const t=_toward(c,target,f);
+    if(_ratio(t,surf)>=CONTRAST_MIN) return _hex(t);
+  }
+  return _hex(target);
+}
+// שני הערכים נפלטים יחד, כי CSS לבדו לא יודע לחשב ניגודיות
+function hatVars(color){ return '--hat:'+safeOn(color,SURF_LIGHT)+';--hat-d:'+safeOn(color,SURF_DARK); }
 function hatOf(key){ return S.cfg.hats.find(h=>h.key===key) || {key:'other',name:'אחר',color:'#8A8F95'}; }
 function familyKey(){ return (S.cfg.hats.find(h=>h.key==='family')||S.cfg.hats[0]||{key:'other'}).key; }
 function guessHat(text){ const words=wordsOf(text); for(const h of S.cfg.hats) if((h.kw||[]).some(k=>k.includes(' ')?String(text||'').includes(k):nameInText(k,words))) return h.key; return 'other'; }
@@ -673,16 +698,16 @@ function renderNow(){
   if(cur){
     const h=hatOf(evHat(cur)); const left=Math.round((new Date(cur.end)-now)/60000);
     const intrude=dh.key!=='other'&&h.key!=='other'&&h.key!==dh.key;
-    html=`<div class="hat"><span class="dot" style="--hat:${h.color}"></span>${esc(h.name)}${intrude?' · חדירה ליום '+esc(dh.name):''}</div>
+    html=`<div class="hat"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}${intrude?' · חדירה ליום '+esc(dh.name):''}</div>
       <div class="title"><span dir="auto">${esc(cur.title)}</span>${tagChips(cur.tags)}</div>
       <div class="meta">עד ${hhmm(new Date(cur.end))} · נשארו ${fmtDur(left)}${cur.location?' · '+esc(cur.location):''}</div>
       <div class="prog"><i style="width:${Math.max(0,Math.min(100,Math.round((now-new Date(cur.start))/(new Date(cur.end)-new Date(cur.start))*100)))}%"></i></div>`;
-    $('now').style.setProperty('--hat',h.color);
+    $('now').setAttribute('style',hatVars(h.color));
   } else {
-    html=`<div class="hat"><span class="dot" style="--hat:${dh.color}"></span>יום ${esc(dh.name)}</div>
+    html=`<div class="hat"><span class="dot" style="${hatVars(dh.color)}"></span>יום ${esc(dh.name)}</div>
       <div class="title">${next?'זמן פנוי עד '+hhmm(new Date(next.start)):(todays.length?'היום הסתיים ביומן':'אין אירועים ביומן היום')}</div>
       <div class="meta">${next?'חלון ריכוז של '+fmtDur(Math.round((new Date(next.start)-now)/60000))+'. מה המטלה הכי חשובה?':'זמן טוב לסגור לולאות פתוחות.'}</div>`;
-    $('now').style.setProperty('--hat',dh.color);
+    $('now').setAttribute('style',hatVars(dh.color));
   }
   if(next) html+=`<div class="next">הבא: <b>${hhmm(new Date(next.start))}</b> ${esc(next.title)}${tagChips(next.tags)}</div>`;
   $('now').innerHTML=html;
@@ -708,7 +733,7 @@ function renderDayRail(){
     if(gap>=20) html+='<div class="gap"><span class="gtime">'+timeRange(cursor,s)+'</span><span>פנוי · '+fmtDur(gap)+'</span></div>';
     const h=hatOf(evHat(e)), dur=Math.max(1,Math.round((en-s)/60000));
     const w=Math.max(6,Math.min(100,Math.round(dur/longest*100)));
-    html+='<div class="ev" style="--hat:'+h.color+'">'
+    html+='<div class="ev" style="'+hatVars(h.color)+'">'
       +'<div class="time">'+timeRange(s,en)+'</div>'
       +'<div><div class="title" dir="auto">'+esc(e.title)+'</div>'
       +'<div class="loc">'+esc(h.name)+(e.location?" · "+esc(e.location):"")+tagChips(e.tags)+'</div>'
@@ -722,7 +747,7 @@ function taskRow(t){
   return `<div class="task ${t.done?'done':''}" data-id="${t.id}">
     <button class="chk" aria-label="סמן כבוצע" data-act="toggle"></button>
     <div class="body"><div class="t" dir="auto">${esc(t.title)}</div>
-      <div class="s"><span><span class="dot" style="--hat:${h.color}"></span>${esc(h.name)}</span>${tagChips(t.tags)}${sharedChip(t)}${t.importance==='high'?'<span>חשוב</span>':''}${t.due&&t.due!==ymd(new Date())?'<span>עד '+esc(t.due)+'</span>':''}</div></div>
+      <div class="s"><span><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}</span>${tagChips(t.tags)}${sharedChip(t)}${t.importance==='high'?'<span>חשוב</span>':''}${t.due&&t.due!==ymd(new Date())?'<span>עד '+esc(t.due)+'</span>':''}</div></div>
     <button class="x" aria-label="מחק" data-act="del">×</button></div>`;
 }
 function renderTasks(){
@@ -743,8 +768,8 @@ function renderWeek(){
   for(let i=0;i<7;i++){
     const d=new Date(start); d.setDate(d.getDate()+i); const dh=hatOf(dayHat(d));
     const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e.tags)).sort((a,b)=>new Date(a.start)-new Date(b.start));
-    html+=`<div class="dayhead ${i===0?'today':''}"><span class="dot" style="--hat:${dh.color}"></span>${i===0?'היום':'יום '+HE_DAYS[d.getDay()]} · ${d.getDate()}.${d.getMonth()+1}${dh.key!=='other'?' · '+esc(dh.name):''}</div>`;
-    html+=evs.length?evs.map(e=>{const h=hatOf(evHat(e));return `<div class="ev" style="--hat:${h.color}"><div class="time">${hhmm(new Date(e.start))}<br>${hhmm(new Date(e.end))}</div><div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>${e.location?`<div class="loc">${esc(e.location)}</div>`:''}</div></div>`;}).join('')
+    html+=`<div class="dayhead ${i===0?'today':''}"><span class="dot" style="${hatVars(dh.color)}"></span>${i===0?'היום':'יום '+HE_DAYS[d.getDay()]} · ${d.getDate()}.${d.getMonth()+1}${dh.key!=='other'?' · '+esc(dh.name):''}</div>`;
+    html+=evs.length?evs.map(e=>{const h=hatOf(evHat(e));return `<div class="ev" style="${hatVars(h.color)}"><div class="time">${hhmm(new Date(e.start))}<br>${hhmm(new Date(e.end))}</div><div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>${e.location?`<div class="loc">${esc(e.location)}</div>`:''}</div></div>`;}).join('')
       :`<div class="ev" style="--hat:transparent"><div class="time"></div><div class="loc">פנוי</div></div>`;
   }
   $('week').innerHTML=html;
@@ -758,7 +783,7 @@ function renderMonth(){
     const d=new Date(now.getFullYear(),now.getMonth(),n); const dh=hatOf(dayHat(d));
     const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e.tags));
     const cols=[...new Set(evs.map(e=>filterTag?tagOf(filterTag).color:hatOf(evHat(e)).color))].slice(0,3);
-    html+=`<div class="d ${ymd(d)===ymd(now)?'today':''} ${dh.key!=='other'?'hatday':''}" style="--hat:${dh.color};--load:${Math.min(4,evs.length)}"><span class="n">${n}</span><span class="dots">${cols.map(c=>`<i style="--hat:${c}"></i>`).join('')}</span></div>`;
+    html+=`<div class="d ${ymd(d)===ymd(now)?'today':''} ${dh.key!=='other'?'hatday':''}" style="${hatVars(dh.color)};--load:${Math.min(4,evs.length)}"><span class="n">${n}</span><span class="dots">${cols.map(c=>`<i style="${hatVars(c)}"></i>`).join('')}</span></div>`;
   }
   $('month').innerHTML=html+'</div>';
 }
@@ -886,7 +911,7 @@ function addProposal(p){
   const h=hatOf(p.hat||guessHat((p.title||'')+' '+(p.body||''))); const d=describe(p);
   const el=document.createElement('div'); el.className='prop'; el.style.setProperty('--hat',h.color); el.dataset.id=id;
   const canShare=p.type!=='email_draft';
-  el.innerHTML=`<div class="kind"><span class="dot" style="--hat:${h.color}"></span>${esc(h.name)} · ${esc(d.kind)}</div>
+  el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)} · ${esc(d.kind)}</div>
     <div class="pt">${esc(d.title)}${tagChips(p.tags)}</div><div class="pm">${esc(d.meta)}</div>
     ${p.why?`<div class="why">${esc(p.why)}</div>`:''}
     ${canShare?`<div class="vis"><button data-vis="0" aria-pressed="${!p.shared}">${LOCK_ICON}פרטי</button><button data-vis="1" aria-pressed="${p.shared}">${SHARE_ICON}משותף</button><span class="status dest"></span></div>`:''}
