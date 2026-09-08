@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F2F4F5">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F4F5">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121417">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.json">
@@ -15,10 +16,11 @@
   --paper:#F2F4F5; --card:#FFFFFF; --ink:#1E2328; --ink-2:#5B6570; --line:#DCE1E6;
   --other:#8A8F95; --warn:#C0392B; --ok:#1D6F42;
   --r-card:14px;
+  color-scheme:light dark;
   --font-body:'Assistant',system-ui,sans-serif; --font-head:'Frank Ruhl Libre',serif;
 }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:17px;line-height:1.45}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:17px;line-height:1.5}
 body{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #3A6EA5;outline-offset:2px}
@@ -52,6 +54,17 @@ section[hidden]{display:none}
 .now .next{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:15px;color:var(--ink-2)}
 .now .next b{color:var(--ink);font-weight:600}
 
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#121417; --card:#1B1F24; --ink:#E7EAED; --ink-2:#9AA4AF; --line:#2C333A;
+    --other:#7A8189; --warn:#E2685A; --ok:#3E9E6B;
+  }
+  .dot{background:color-mix(in srgb,var(--hat,var(--other)) 74%,white)}
+  .ev{border-inline-start-color:color-mix(in srgb,var(--hat,var(--other)) 74%,white)}
+  .now::before,.ev .bar i,.now .prog i{background:color-mix(in srgb,var(--hat,var(--other)) 74%,white)}
+  .month .d .dots i{background:color-mix(in srgb,var(--hat) 74%,white)}
+  .tag{background:color-mix(in srgb,var(--ink) 8%,var(--card))}
+}
 h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8px}
 .card{background:var(--card);border-radius:var(--r-card);padding:6px 0;box-shadow:0 1px 0 var(--line)}
 
@@ -96,7 +109,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:21px;margin:22px 2px 8
 .month .d .n{font-size:15px}
 .month .d .dots{display:flex;margin-top:4px;height:4px;width:62%;gap:2px}
 .month .d .dots i{flex:1;height:4px;border-radius:2px;background:var(--hat)}
-.month .d.hatday{background:color-mix(in srgb,var(--hat) 14%,white)}
+.month .d.hatday{background:color-mix(in srgb,var(--hat) calc(10% + var(--load,0) * 5%),var(--card))}
 
 .log{padding:12px 16px;border-bottom:1px solid var(--line);font-size:15px}
 .log:last-child{border-bottom:0}
@@ -636,7 +649,7 @@ function renderMonth(){
     const d=new Date(now.getFullYear(),now.getMonth(),n); const dh=hatOf(dayHat(d));
     const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e.tags));
     const cols=[...new Set(evs.map(e=>filterTag?tagOf(filterTag).color:hatOf(evHat(e)).color))].slice(0,3);
-    html+=`<div class="d ${ymd(d)===ymd(now)?'today':''} ${dh.key!=='other'?'hatday':''}" style="--hat:${dh.color}"><span class="n">${n}</span><span class="dots">${cols.map(c=>`<i style="--hat:${c}"></i>`).join('')}</span></div>`;
+    html+=`<div class="d ${ymd(d)===ymd(now)?'today':''} ${dh.key!=='other'?'hatday':''}" style="--hat:${dh.color};--load:${Math.min(4,evs.length)}"><span class="n">${n}</span><span class="dots">${cols.map(c=>`<i style="--hat:${c}"></i>`).join('')}</span></div>`;
   }
   $('month').innerHTML=html+'</div>';
 }
