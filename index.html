@@ -19,6 +19,7 @@
   --ink:#1D2228; --ink-2:#5C6671; --ink-3:#77818C;
   --line:rgb(0 0 0 / .08); --line-2:rgb(0 0 0 / .22);
   --on-ink:#FFFFFF; --other:#8A8F95;
+  --accent:#1B63C9; --accent-soft:#E8F0FC;
   --ok:#0C6439; --warn:#784700; --err:#942627;
   --fs-1:12px; --lh-1:16px; --fs-2:14px; --lh-2:20px; --fs-3:17px; --lh-3:24px;
   --fs-4:20px; --lh-4:24px; --fs-5:24px; --lh-5:28px; --fs-6:30px; --lh-6:36px;
@@ -36,7 +37,6 @@
 html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:17px;line-height:1.5}
 body{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
-button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #3A6EA5;outline-offset:2px}
 /* לא לבטל הכול: התקן מחריג שינויי שקיפות, ואפל ממליצה להחליף תזוזה בעמעום. */
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
@@ -51,22 +51,22 @@ header{padding:14px 14px 6px;display:flex;align-items:center;justify-content:spa
 .hnav{display:flex;gap:2px;flex:none}
 .hib{width:44px;height:44px;border-radius:999px;display:grid;place-items:center;color:var(--ink-2)}
 .hib svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
-.hib[aria-selected="true"]{background:var(--ink);color:var(--card)}
-header h1{font-family:var(--font-head);font-weight:700;font-size:30px;margin:0;line-height:1.1}
+.hib[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
+header h1{font-family:var(--font-head);font-weight:500;font-size:var(--fs-5);margin:0;line-height:1.2;white-space:nowrap}
 header .date{color:var(--ink-2);font-size:14px;text-align:end}
 header .date b{display:block;color:var(--ink);font-weight:600}
 
 nav.tabs{display:flex;gap:4px;padding:8px 14px 4px;overflow-x:auto;scrollbar-width:none}
 nav.tabs::-webkit-scrollbar{display:none}
 nav.tabs button{padding:8px 14px;border-radius:999px;color:var(--ink-2);white-space:nowrap;font-weight:600}
-nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--on-ink)}
+nav.tabs button[aria-selected="true"]{background:none;color:var(--accent);border-bottom:2px solid var(--accent);border-radius:0;padding-bottom:6px}
 
 .filter{display:flex;gap:6px;padding:6px 14px 0;overflow-x:auto;scrollbar-width:none}
 .filter::-webkit-scrollbar{display:none}
 .filter:empty{display:none}
 .filter button{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--card);box-shadow:0 1px 0 var(--line);font-size:14px;color:var(--ink-2);white-space:nowrap}
 .filter button i{width:10px;height:10px;border-radius:50%;background:var(--tag)}
-.filter button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+.filter button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 
 .banner{margin:6px 14px 0;padding:14px 16px;border-radius:var(--r-card);background:var(--card);box-shadow:0 1px 0 var(--line);border-inline-start:7px solid var(--ok)}
 .banner[hidden]{display:none}
@@ -93,6 +93,7 @@ section[hidden]{display:none}
     --elev-1:inset 0 1px 0 rgb(255 255 255/.05), 0 1px 2px rgb(0 0 0/.40);
     --elev-2:inset 0 1px 0 rgb(255 255 255/.07), 0 2px 6px rgb(0 0 0/.45), 0 12px 28px rgb(0 0 0/.45);
     --on-ink:#101316; --other:#7A8189;
+    --accent:#8AB4F8; --accent-soft:#1B2A3F;
     --ok:#78C594; --warn:#ECB668; --err:#EE8881;
   }
   .dot{background:var(--hat-d,var(--hat,var(--other)))}
@@ -102,7 +103,7 @@ section[hidden]{display:none}
   .month .d.hatday{background:color-mix(in srgb,var(--ink) calc(4% + var(--load,0) * 4%),var(--card))}
   .tag{background:color-mix(in srgb,var(--tag) 22%,var(--card));border-color:color-mix(in srgb,var(--tag) 45%,transparent)}
 }
-:focus-visible{outline:2px solid var(--ink);outline-offset:2px;box-shadow:0 0 0 4px var(--paper);border-radius:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;box-shadow:0 0 0 4px var(--paper);border-radius:inherit}
 /* משוב מגע: במסך מגע זה האות היחיד שהנגיעה נקלטה */
 button,.task,.ev{transition:background-color var(--dur-1) var(--ease-std),transform var(--dur-1) var(--ease-std);-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 button:active,.task:active,.ev:active{transform:scale(.985)}
@@ -152,9 +153,9 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .month{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:12px}
 .month .dow{text-align:center;color:var(--ink-2);font-size:12px;padding-bottom:4px}
 .month .d{aspect-ratio:1;border-radius:var(--r-1);display:flex;flex-direction:column;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;background:var(--field)}
-.month .d.today{outline:2px solid var(--ink);font-weight:700}
-.month .d.sel{outline:2px solid var(--ink);background:var(--ink);color:var(--on-ink)}
-.month .d.sel .n{color:var(--on-ink)}
+.month .d.today{outline:2px solid var(--accent);font-weight:700}
+.month .d.sel{outline:2px solid var(--accent);background:var(--accent-soft)}
+.month .d.sel .n{color:var(--accent);font-weight:700}
 .month button.d{border:0;font:inherit;cursor:pointer}
 .month .d.other{opacity:.35}
 .month .d .n{font-size:14px}
@@ -205,7 +206,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .prop .vis svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
 .prop .acts{display:flex;gap:8px;margin-top:10px}
 .prop .acts button{flex:1;padding:10px;border-radius:10px;font-weight:700}
-.prop .yes{background:var(--ink);color:var(--on-ink)}
+.prop .yes{background:var(--accent);color:#fff}
 .prop .no{background:var(--paper);color:var(--ink-2)}
 .prop.done{opacity:.55}
 .prop.done .acts,.prop.done .vis{display:none}
@@ -225,7 +226,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .ib.mic,.ib.cam{color:var(--ink)}
 .ib.mic.on{background:var(--warn);color:var(--on-ink);animation:pulse 1.2s infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--warn) 45%,transparent)}50%{box-shadow:0 0 0 10px transparent}}
-.ib.send{background:var(--ink);color:var(--on-ink)}
+.ib.send{background:var(--accent);color:#fff}
 .ib.send:disabled{opacity:.35}
 .hint{text-align:center;color:var(--ink-2);font-size:12px;margin-top:6px;min-height:16px}
 
@@ -237,7 +238,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .form .note{color:var(--ink-2);font-size:14px;margin-top:6px}
 details>summary{padding:12px 16px;cursor:pointer;font-weight:600;color:var(--ink-2)}
 details[open]>summary{border-bottom:1px solid var(--line)}
-.btn{display:inline-block;padding:11px 18px;border-radius:10px;background:var(--ink);color:var(--on-ink);font-weight:700;margin-top:14px}
+.btn{display:inline-block;padding:11px 18px;border-radius:var(--r-3);background:var(--accent);color:#fff;font-weight:600;margin-top:14px}
 .btn.ghost{background:var(--paper);color:var(--ink)}
 .status{font-size:14px;color:var(--ink-2);margin-top:8px}
 .tagrow{display:grid;grid-template-columns:24px 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
