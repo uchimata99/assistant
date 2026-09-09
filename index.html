@@ -1147,9 +1147,14 @@ function addMsg(text,who,imgs){ const d=document.createElement('div'); d.classNa
 
 // עריכה בתוך הכרטיס: כשהשעה שהוצעה לא טובה מתקנים אותה כאן, בלי לנסח מחדש את הבקשה.
 function editForm(p){
+  const kindPick=t=>`<label>סוג<select data-e="kind">
+      <option value="event" ${t==='event'?'selected':''}>אירוע ביומן</option>
+      <option value="task" ${t==='task'?'selected':''}>מטלה ברשימה</option>
+    </select></label>`;
   if(p.type==='event'){
     const r=p.repeat||{};
     return `<div class="edit" hidden>
+      ${kindPick('event')}
       <label>כותרת<input type="text" data-e="title" value="${esc(p.title||'')}"></label>
       <div class="r3">
         <label>תאריך<input type="date" data-e="date" value="${dpart(p.start)}"></label>
@@ -1170,6 +1175,7 @@ function editForm(p){
   }
   if(p.type==='task'){
     return `<div class="edit" hidden>
+      ${kindPick('task')}
       <label>כותרת<input type="text" data-e="title" value="${esc(p.title||'')}"></label>
       <div class="r">
         <label>עד תאריך<input type="date" data-e="due" value="${esc(p.due||'')}"></label>
@@ -1189,6 +1195,28 @@ function editForm(p){
   }
   return '';
 }
+// מטלה אינה נכנסת ליומן גוגל לעולם. כשמתברר שהתכוונו לפגישה, ההמרה נעשית כאן
+// במקום לנסח את הבקשה מחדש. הכרטיס נבנה מחדש, כי מבנה השדות שונה לגמרי.
+function convertProposal(el,p,kind){
+  if(kind===p.type) return;
+  if(kind==='event'){
+    const d=p.due||ymd(new Date());
+    p.start=mkISO(d,'09:00')||new Date().toISOString();
+    p.end=new Date(new Date(p.start).getTime()+36e5).toISOString();
+    delete p.due; delete p.mit;
+  } else {
+    p.due=p.start?dpart(p.start):ymd(new Date());
+    delete p.start; delete p.end; delete p.location; delete p.repeat;
+  }
+  p.type=kind;
+  delete S.pending[el.dataset.id];
+  el.remove();
+  addProposal(p);
+  const fresh=[...document.querySelectorAll('.prop')].pop();
+  const ed=fresh&&fresh.querySelector('.edit');
+  if(ed){ ed.hidden=false; fresh.querySelector('.fix').setAttribute('aria-pressed','true'); }
+}
+
 // אחרי כל עריכה מרעננים את מה שמוצג, כדי שהכרטיס לא יבטיח דבר אחד ויבצע אחר.
 function refreshProp(el,p){
   const d=describe(p); const h=accentOf(p);
@@ -1488,6 +1516,7 @@ $('msgs').addEventListener('input',e=>{
   const p=S.pending[el.dataset.id]; if(!p) return;
   const val=k=>{ const x=el.querySelector('[data-e="'+k+'"]'); return x?x.value:''; };
   const k=f.dataset.e;
+  if(k==='kind'){ convertProposal(el,p,f.value); return; }
   if(p.type==='event'){
     if(k==='date'||k==='from'){
       // שינוי התחלה מזיז את הסוף באותו הפרש, כמו בכל יומן. משך האירוע נשמר.
