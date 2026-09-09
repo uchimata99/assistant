@@ -1288,7 +1288,8 @@ async function approve(id,el){
 
 async function send(text){
   text=(text||'').trim(); const imgs=S.images.slice(); if(!text&&!imgs.length) return;
-  openChat(); addMsg(text||(imgs.length?'(תמונה)':''),'me',imgs.map(i=>i.src)); $('input').value=''; S.images=[]; renderAttach(); autosize(); $('send').disabled=true;
+  openChat(); abortMic(); beepSent();
+  addMsg(text||(imgs.length?'(תמונה)':''),'me',imgs.map(i=>i.src)); $('input').value=''; S.images=[]; renderAttach(); autosize(); $('send').disabled=true;
   const thinking=addMsg('…','sys');
   try{
     const now=new Date();
@@ -1386,19 +1387,57 @@ async function pickupShared(){
 }
 
 /* ===================== דיבור ===================== */
-let rec=null,listening=false;
+let rec=null,listening=false,quietEnd=false;
 function setupSpeech(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ $('mic').style.display='none'; return; }
-  rec=new SR(); rec.lang=S.cfg.voicelang; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1; let finalText='';
-  rec.onstart=()=>{listening=true;disarmTap();$('mic').classList.add('on');$('hint').textContent=T().speak+' לעצירה — שוב על המיקרופון.';finalText='';};
-  rec.onresult=ev=>{let interim='';for(const r of ev.results){if(r.isFinal)finalText+=r[0].transcript;else interim+=r[0].transcript;}$('input').value=(finalText+' '+interim).trim();autosize();$('send').disabled=!$('input').value.trim();};
+  rec=new SR(); rec.lang=S.cfg.voicelang; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1;
+  rec.onstart=()=>{listening=true;disarmTap();beepOn();$('mic').classList.add('on');$('hint').textContent=T().speak+' לעצירה — שוב על המיקרופון.';};
+  // ev.results הוא מצטבר, ובכל אירוע הוא כולל שוב את כל מה שכבר סופי. לכן בונים
+  // את הטקסט מחדש בכל פעם. צבירה לתוך משתנה חיצוני שכפלה כל מילה סופית.
+  rec.onresult=ev=>{
+    const fin=[],interim=[];
+    for(const r of ev.results){ (r.isFinal?fin:interim).push(r[0].transcript); }
+    // חלק מהמנועים מחזירים רווח מוביל וחלק לא. מאחדים, ואז מכווצים רווחים כפולים.
+    $('input').value=fin.concat(interim).join(' ').replace(/\s+/g,' ').trim();
+    autosize(); $('send').disabled=!$('input').value.trim();
+  };
   rec.onerror=ev=>{ if(!chatOpen()){ renderHint(); return; } $('hint').textContent=ev.error==='not-allowed'?'צריך לאשר גישה למיקרופון בדפדפן.':ev.error==='no-speech'?T().retry:'שגיאת דיבור: '+ev.error;};
   rec.onend=()=>{listening=false;$('mic').classList.remove('on');
+    if(quietEnd){ quietEnd=false; } else beepOff();
     if(!chatOpen()){ renderHint(); return; }
     if($('input').value.trim())$('hint').textContent='לשלוח? אפשר לתקן קודם.';};
 }
 function toggleMic(){ if(!rec) return; if(listening){rec.stop();return;} rec.lang=S.cfg.voicelang; try{rec.start();}catch(e){} }
+// אחרי שליחה זורקים את מה שנותר בתור. stop היה מגלגל את השארית חזרה לשורה,
+// וכל משפט חדש היה נדבק להודעה שכבר נשלחה.
+function abortMic(){ disarmTap(); if(rec&&listening){ quietEnd=true; try{ rec.abort(); }catch(e){} } }
+
+/* חיווי קולי: צליל קצר מהדפדפן עצמו, בלי קובץ ובלי ספרייה. */
+let actx=null;
+function tone(steps){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    actx=actx||new AC(); if(actx.state==='suspended') actx.resume();
+    let t=actx.currentTime+0.01;
+    for(const [f,d] of steps){
+      const o=actx.createOscillator(), g=actx.createGain();
+      o.type='sine'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.14,t+0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+      o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+d+0.02);
+      t+=d;
+    }
+  }catch(e){}
+}
+const beepOn =()=>tone([[660,0.09],[990,0.11]]);   // עולה: המיקרופון נפתח
+const beepOff=()=>tone([[880,0.09],[520,0.12]]);   // יורד: נסגר
+const beepSent=()=>tone([[784,0.07],[1175,0.13]]); // ההודעה יצאה
+// דפדפנים בנייד לא מנגנים לפני מגע. הנגיעה הראשונה משחררת את הצליל.
+document.addEventListener('pointerdown',function unlock(){
+  document.removeEventListener('pointerdown',unlock,true);
+  try{ const AC=window.AudioContext||window.webkitAudioContext; if(AC){ actx=actx||new AC(); actx.resume(); } }catch(e){}
+},true);
 // כניסה ישירה להקלטה, מקיצור בטלפון. פותחת את השיחה ומדליקה את המיקרופון.
 // כפתור הכיבוי עצמו אינו מגיע לדף — אין דרך לדפדפן לשמוע אותו — ולכן הקיצור
 // הוא הדרך הקרובה ביותר ללחיצה אחת מבחוץ.
