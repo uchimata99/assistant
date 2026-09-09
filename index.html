@@ -188,6 +188,11 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .prop .pt{font-weight:700;font-size:17px;margin:2px 0 4px}
 .prop .pm{color:var(--ink-2);font-size:14px;white-space:pre-wrap}
 .prop .why{margin-top:8px;font-size:14px;color:var(--ink-2);border-top:1px dashed var(--line);padding-top:8px}
+.prop .who4{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center}
+.prop .who4 .lbl{font-size:var(--fs-2);color:var(--ink-2);margin-inline-end:2px}
+.prop .who4 button{padding:8px 12px;border-radius:999px;background:var(--field);font-size:var(--fs-2);color:var(--ink-2);min-height:40px}
+.prop .who4 button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+.prop.done .who4 button{display:none}
 .prop .vis{display:flex;gap:6px;margin-top:10px}
 .prop .vis button{padding:6px 12px;border-radius:999px;background:var(--paper);font-size:14px;color:var(--ink-2);display:flex;align-items:center;gap:5px}
 .prop .vis button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
@@ -1065,6 +1070,10 @@ function addProposal(p){
   el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)} · ${esc(d.kind)}</div>
     <div class="pt">${esc(d.title)}${tagChips(p.tags)}</div><div class="pm">${esc(d.meta)}</div>
     ${p.why?`<div class="why">${esc(p.why)}</div>`:''}
+    ${(S.cfg.tags||[]).length?`<div class="who4">
+      <span class="lbl">${(p.tags||[]).length?'שויך אל':'למי זה שייך?'}</span>
+      ${(S.cfg.tags||[]).map(t=>`<button data-kid="${esc(t.key)}" aria-pressed="${(p.tags||[]).includes(t.key)}">${esc(t.name)}${ageOf(t.dob)!==null?' · '+ageOf(t.dob):''}</button>`).join('')}
+    </div>`:''}
     ${canShare?`<div class="vis"><button data-vis="0" aria-pressed="${!p.shared}">${LOCK_ICON}פרטי</button><button data-vis="1" aria-pressed="${p.shared}">${SHARE_ICON}משותף</button><span class="status dest"></span></div>`:''}
     <div class="acts"><button class="yes" data-act="approve">${T().approve}</button><button class="no" data-act="reject">לא עכשיו</button></div>
     <div class="status"></div>`;
@@ -1226,6 +1235,19 @@ document.querySelectorAll('.quick button').forEach(b=>b.addEventListener('click'
 
 $('msgs').addEventListener('click',e=>{
   const v=e.target.closest('button[data-vis]');
+  const kid=e.target.closest('button[data-kid]');
+  if(kid){
+    const el=kid.closest('.prop'); const p=S.pending[el.dataset.id]; if(!p) return;
+    const key=kid.dataset.kid; p.tags=p.tags||[];
+    const i=p.tags.indexOf(key);
+    if(i>=0) p.tags.splice(i,1); else p.tags.push(key);
+    kid.setAttribute('aria-pressed', i>=0?'false':'true');
+    // פריט ששייך לילד הוא משותף. אפשר עדיין להחליף ידנית.
+    if(p.tags.length && !p.shared){ p.shared=true; el.querySelectorAll('button[data-vis]').forEach(x=>x.setAttribute('aria-pressed', x.dataset.vis==='1')); }
+    const lbl=el.querySelector('.who4 .lbl'); if(lbl) lbl.textContent = p.tags.length?'שויך אל':'למי זה שייך?';
+    updateDest(el,p);
+    return;
+  }
   if(v){const el=v.closest('.prop');const p=S.pending[el.dataset.id];if(!p)return;p.shared=v.dataset.vis==='1';el.querySelectorAll('button[data-vis]').forEach(x=>x.setAttribute('aria-pressed',x===v));updateDest(el,p);return;}
   const b=e.target.closest('button[data-act]'); if(!b) return;
   const el=b.closest('.prop'); const id=el.dataset.id;
