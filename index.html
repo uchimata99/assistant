@@ -1383,7 +1383,7 @@ function setupSpeech(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ $('mic').style.display='none'; return; }
   rec=new SR(); rec.lang=S.cfg.voicelang; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1; let finalText='';
-  rec.onstart=()=>{listening=true;$('mic').classList.add('on');$('hint').textContent=T().speak;finalText='';};
+  rec.onstart=()=>{listening=true;disarmTap();$('mic').classList.add('on');$('hint').textContent=T().speak;finalText='';};
   rec.onresult=ev=>{let interim='';for(const r of ev.results){if(r.isFinal)finalText+=r[0].transcript;else interim+=r[0].transcript;}$('input').value=(finalText+' '+interim).trim();autosize();$('send').disabled=!$('input').value.trim();};
   rec.onerror=ev=>{$('hint').textContent=ev.error==='not-allowed'?'צריך לאשר גישה למיקרופון בדפדפן.':ev.error==='no-speech'?T().retry:'שגיאת דיבור: '+ev.error;};
   rec.onend=()=>{listening=false;$('mic').classList.remove('on');if($('input').value.trim())$('hint').textContent='לשלוח? אפשר לתקן קודם.';};
@@ -1393,12 +1393,35 @@ function toggleMic(){ if(!rec) return; if(listening){rec.stop();return;} rec.lan
 // כפתור הכיבוי עצמו אינו מגיע לדף — אין דרך לדפדפן לשמוע אותו — ולכן הקיצור
 // הוא הדרך הקרובה ביותר ללחיצה אחת מבחוץ.
 function recLink(){ return location.origin+location.pathname+'?rec=1'; }
-function startRecording(){
+// כרום באנדרואיד דורש לרוב מגע של המשתמש כדי להתחיל זיהוי דיבור, ופתיחת דף
+// מקיצור אינה נחשבת מגע. לכן יש כאן שתי שכבות: ניסיון מיידי, ואם הוא לא תפס —
+// ההקשה הבאה במסך, בכל מקום, מתחילה את ההקלטה. בלי לחפש את המיקרופון.
+let tapToTalk=null;
+function disarmTap(){ if(tapToTalk){ document.removeEventListener('pointerdown',tapToTalk,true); tapToTalk=null; } }
+function armTapToTalk(){
+  if(tapToTalk) return;
+  $('hint').textContent='הקש במסך כדי לדבר.';
+  tapToTalk=e=>{
+    // פקדים אמיתיים עושים את שלהם. אחרת לחיצה על המיקרופון הייתה מדליקה ומכבה מיד.
+    if(e.target.closest('#mic,#input,#send,#closechat,.ln-fab,.quick')){ disarmTap(); if($('hint').textContent==='הקש במסך כדי לדבר.') $('hint').textContent=''; return; }
+    disarmTap();
+    if(!listening) toggleMic();
+  };
+  document.addEventListener('pointerdown',tapToTalk,true);
+}
+async function startRecording(){
   openChat();
   if(!rec){ $('input').focus(); $('hint').textContent='אין זיהוי דיבור בדפדפן הזה. אפשר להקליד.'; return; }
-  // ההפעלה מיד אחרי פתיחת הדף נחסמת לפעמים עד שההרשאה ניתנת. אז אומרים מה לעשות.
-  try{ rec.lang=S.cfg.voicelang; rec.start(); }
-  catch(e){ $('hint').textContent='לחצו על המיקרופון כדי להתחיל.'; }
+  armTapToTalk();
+  try{
+    // מבקשים את המיקרופון קודם: כשההרשאה כבר ניתנה זה נפתר מיד, וזה גם מה שמביא
+    // את בקשת ההרשאה בפעם הראשונה, במקום כישלון שקט של הזיהוי.
+    if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+      const st=await navigator.mediaDevices.getUserMedia({audio:true});
+      st.getTracks().forEach(t=>t.stop());
+    }
+  }catch(e){}
+  try{ rec.lang=S.cfg.voicelang; rec.start(); }catch(e){}
 }
 
 /* ===================== אירועי ממשק ===================== */
