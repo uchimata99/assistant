@@ -96,11 +96,11 @@ section[hidden]{display:none}
     --ok:#78C594; --warn:#ECB668; --err:#EE8881;
   }
   .dot{background:var(--hat-d,var(--hat,var(--other)))}
-  .ev{border-inline-start-color:var(--hat-d,var(--hat,var(--other)))}
+  .ev{border-inline-start-color:var(--hat-d,var(--hat,var(--other)));background:color-mix(in srgb,var(--hat-d,var(--hat)) 12%,transparent)}
   .now::before,.ev .bar i,.now .prog i{background:var(--hat-d,var(--hat,var(--other)))}
   .month .d .dots i{background:var(--hat-d,var(--hat))}
   .month .d.hatday{background:color-mix(in srgb,var(--ink) calc(4% + var(--load,0) * 4%),var(--card))}
-  .tag{background:color-mix(in srgb,var(--ink) 8%,var(--card))}
+  .tag{background:color-mix(in srgb,var(--tag) 22%,var(--card));border-color:color-mix(in srgb,var(--tag) 45%,transparent)}
 }
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px;box-shadow:0 0 0 4px var(--paper);border-radius:inherit}
 /* משוב מגע: במסך מגע זה האות היחיד שהנגיעה נקלטה */
@@ -123,14 +123,15 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .task.done .t{text-decoration:line-through;color:var(--ink-2)}
 .task .s{color:var(--ink-2);font-size:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--hat,var(--other));vertical-align:middle;margin-inline-end:4px}
-.tag{display:inline-block;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;background:var(--field);color:var(--ink);border:1px solid var(--line);margin-inline-start:6px;vertical-align:middle}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;background:color-mix(in srgb,var(--tag) 16%,var(--card));color:var(--tag-ink,var(--ink));border:1px solid color-mix(in srgb,var(--tag) 34%,transparent);margin-inline-start:6px;vertical-align:middle}
 .shared{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--ink-2)}
+.owner{display:inline-block;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;background:var(--field);color:var(--ink-2);border:1px solid var(--line);margin-inline-start:6px}
 .shared svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
 .empty{padding:22px 16px;color:var(--ink-2)}
 .empty b{color:var(--ink);display:block;margin-bottom:4px;font-weight:600}
 .task .x{color:var(--ink-2);font-size:20px;line-height:1;min-width:44px;min-height:44px;margin:-10px -8px;flex:none}
 
-.ev{display:grid;grid-template-columns:64px 1fr;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);border-inline-start:7px solid var(--hat,var(--other))}
+.ev{display:grid;grid-template-columns:64px 1fr;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);border-inline-start:7px solid var(--hat,var(--other));background:color-mix(in srgb,var(--hat) 6%,transparent)}
 .ev:last-child{border-bottom:0}
 /* לגופן הגוף אין ספרות ברוחב אחיד, ולכן ההצהרה כאן הייתה חסרת השפעה.
    העמודה ברוחב קבוע ממילא, אז הקצה המשונן נשאר בתוך התא. */
@@ -151,7 +152,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .month{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:12px}
 .month .dow{text-align:center;color:var(--ink-2);font-size:12px;padding-bottom:4px}
 .month .d{aspect-ratio:1;border-radius:var(--r-1);display:flex;flex-direction:column;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;background:var(--field)}
-.month .d.today{outline:2px solid var(--ink)}
+.month .d.today{outline:2px solid var(--ink);font-weight:700}
 .month .d.other{opacity:.35}
 .month .d .n{font-size:14px}
 .month .d .dots{display:flex;margin-top:4px;height:4px;width:62%;gap:2px}
@@ -190,8 +191,10 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .prop .why{margin-top:8px;font-size:14px;color:var(--ink-2);border-top:1px dashed var(--line);padding-top:8px}
 .prop .who4{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center}
 .prop .who4 .lbl{font-size:var(--fs-2);color:var(--ink-2);margin-inline-end:2px}
-.prop .who4 button{padding:8px 12px;border-radius:999px;background:var(--field);font-size:var(--fs-2);color:var(--ink-2);min-height:40px}
-.prop .who4 button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+.prop .who4 button{padding:8px 12px;border-radius:999px;background:var(--field);font-size:var(--fs-2);color:var(--ink-2);min-height:40px;border:1px solid transparent}
+.prop .who4 button.kid{border-color:color-mix(in srgb,var(--tag) 45%,transparent);color:var(--ink)}
+.prop .who4 button.kid[aria-pressed="true"]{background:color-mix(in srgb,var(--tag) 20%,var(--card));border-color:var(--tag);font-weight:600}
+.prop .who4 button.grown[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
 .prop.done .who4 button{display:none}
 .prop .vis{display:flex;gap:6px;margin-top:10px}
 .prop .vis button{padding:6px 12px;border-radius:999px;background:var(--paper);font-size:14px;color:var(--ink-2);display:flex;align-items:center;gap:5px}
@@ -342,6 +345,10 @@ details[open]>summary{border-bottom:1px solid var(--line)}
           <select id="gender"><option value="m">פנייה בלשון זכר</option><option value="f">פנייה בלשון נקבה</option></select>
         </div>
 
+        <label for="pname">שם בן או בת הזוג</label>
+        <input id="pname" type="text" placeholder="השם שיופיע בכרטיסים">
+        <div class="note">מופיע ככפתור בכרטיס ההצעה, כדי לשייך אירוע או מטלה לאחד מכם. נשמר במכשיר בלבד.</div>
+
         <label for="famcal">יומן משפחתי משותף</label>
         <select id="famcal"></select>
         <div class="note">לכאן נכנסים אירועים "משותפים" שאינם של ילד מסוים. היומן הזה משותף בין שני החשבונות.</div>
@@ -482,7 +489,7 @@ const PROFILES = {
 };
 const DEFAULTS = {
   profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL',
-  remind:'30', digestChannel:'notify', digestHour:21,
+  remind:'30', digestChannel:'notify', digestHour:21, partnerName:'',
   familyCalendarId:'',
   // התגים נוספים בהגדרות: שם, כינויים לזיהוי בדיבור ובהודעות, ויומן מהרשימה.
   tags:[],
@@ -507,7 +514,7 @@ function T(){
     mitsEmpty:'אמרי לי מה המטלות המהותיות של היום, או לחצי לחיצה ארוכה על מטלה כדי לקדם אותה לכאן.',
     tasksEmpty:'כתבי "תזכיר לי..." או דברי אליי.', share:'שתפי', you:'את',
   } : {
-    placeholder:'כתוב או דבר: קבע, הזכר, נסח...', approve:'אשר', speak:'מקשיב... דבר.', retry:'לא שמעתי כלום. נסה שוב.',
+    placeholder:'הודעה', approve:'אשר', speak:'מקשיב... דבר.', retry:'לא שמעתי כלום. נסה שוב.',
     mitsEmpty:'אמור לי מה המטלות המהותיות של היום, או לחץ לחיצה ארוכה על מטלה כדי לקדם אותה לכאן.',
     tasksEmpty:'כתוב "תזכיר לי..." או דבר אליי.', share:'שתף', you:'אתה',
   };
@@ -676,7 +683,7 @@ function guessTags(text,calendarId,calendarName){
   ).map(tg=>tg.key);
 }
 function normTags(list){ return (list||[]).map(x=>tagOf(x)?x:(tagByName(x)||{}).key).filter(Boolean); }
-function tagChips(keys){ return (keys||[]).map(k=>{const tg=tagOf(k);return tg?`<span class="tag" style="--tag:${tg.color}">${esc(tg.name)}</span>`:'';}).join(''); }
+function tagChips(keys){ return (keys||[]).map(k=>{const tg=tagOf(k);return tg?`<span class="tag" style="${hatVars(tg.color).replace(/--hat/g,'--tag')};--tag-ink:${safeOn(tg.color,SURF_LIGHT)}">${esc(tg.name)}</span>`:'';}).join(''); }
 function sharedChip(x){ return x.shared ? `<span class="shared">${SHARE_ICON}${x.author&&x.author!==S.cfg.me?esc(x.author):'משותף'}</span>` : ''; }
 let filterTag=null;
 const passFilter=keys=>!filterTag||(keys||[]).includes(filterTag);
@@ -822,7 +829,7 @@ function taskRow(t){
   return `<div class="task ${t.done?'done':''}" data-id="${t.id}">
     <button class="chk" aria-label="סמן כבוצע" data-act="toggle"></button>
     <div class="body"><div class="t" dir="auto">${esc(t.title)}</div>
-      <div class="s">${tagChips(t.tags)}${sharedChip(t)}${t.importance==='high'?'<span>חשוב</span>':''}${t.due&&t.due!==ymd(new Date())?'<span>עד '+esc(t.due)+'</span>':''}</div></div>
+      <div class="s">${tagChips(t.tags)}${(t.people||[]).map(n=>`<span class="owner">${esc(n)}</span>`).join('')}${sharedChip(t)}${t.importance==='high'?'<span>חשוב</span>':''}${t.due&&t.due!==ymd(new Date())?'<span>עד '+esc(t.due)+'</span>':''}</div></div>
     <button class="x" aria-label="מחק" data-act="del">×</button></div>`;
 }
 function renderTasks(){
@@ -994,7 +1001,7 @@ function readTagsFromForm(){
 function renderSettings(){
   renderInstall();
   $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang;
-  $('secret').value=S.cfg.secret||''; $('remind').value=S.cfg.remind||'';
+  $('secret').value=S.cfg.secret||''; $('remind').value=S.cfg.remind||''; $('pname').value=S.cfg.partnerName||'';
   $('digesth').innerHTML=Array.from({length:24},(_,h)=>`<option value="${h}" ${h===+S.cfg.digestHour?'selected':''}>${pad(h)}:00</option>`).join('');
   $('digestch').value=S.cfg.digestChannel||'off';
   $('conn').open=!S.cfg.url;
@@ -1052,6 +1059,8 @@ function describe(p){
   return {kind:p.type,title:JSON.stringify(p),meta:''};
 }
 function reminderList(){ return String(S.cfg.remind||'').split(',').map(x=>parseInt(x,10)).filter(n=>!isNaN(n)); }
+// שני המבוגרים. השם השני נשמר בהגדרות ואינו בקוד.
+function peopleNames(){ return [S.cfg.me, S.cfg.partnerName].map(x=>String(x||'').trim()).filter(Boolean); }
 function targetCal(p){ // לאן נכנס אירוע משותף
   const kid=p.tags.map(tagOf).find(t=>t&&t.calendarId);
   if(kid) return {id:kid.calendarId,name:'היומן של '+kid.name};
@@ -1070,10 +1079,11 @@ function addProposal(p){
   el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)} · ${esc(d.kind)}</div>
     <div class="pt">${esc(d.title)}${tagChips(p.tags)}</div><div class="pm">${esc(d.meta)}</div>
     ${p.why?`<div class="why">${esc(p.why)}</div>`:''}
-    ${(S.cfg.tags||[]).length?`<div class="who4">
-      <span class="lbl">${(p.tags||[]).length?'שויך אל':'למי זה שייך?'}</span>
-      ${(S.cfg.tags||[]).map(t=>`<button data-kid="${esc(t.key)}" aria-pressed="${(p.tags||[]).includes(t.key)}">${esc(t.name)}${ageOf(t.dob)!==null?' · '+ageOf(t.dob):''}</button>`).join('')}
-    </div>`:''}
+    <div class="who4">
+      <span class="lbl">${((p.tags||[]).length||(p.people||[]).length)?'שויך אל':'למי זה שייך?'}</span>
+      ${(S.cfg.tags||[]).map(t=>`<button class="kid" data-kid="${esc(t.key)}" aria-pressed="${(p.tags||[]).includes(t.key)}" style="${hatVars(t.color).replace(/--hat/g,'--tag')}">${esc(t.name)}${ageOf(t.dob)!==null?' · '+ageOf(t.dob):''}</button>`).join('')}
+      ${peopleNames().map(n=>`<button class="grown" data-who="${esc(n)}" aria-pressed="${(p.people||[]).includes(n)}">${esc(n)}</button>`).join('')}
+    </div>
     ${canShare?`<div class="vis"><button data-vis="0" aria-pressed="${!p.shared}">${LOCK_ICON}פרטי</button><button data-vis="1" aria-pressed="${p.shared}">${SHARE_ICON}משותף</button><span class="status dest"></span></div>`:''}
     <div class="acts"><button class="yes" data-act="approve">${T().approve}</button><button class="no" data-act="reject">לא עכשיו</button></div>
     <div class="status"></div>`;
@@ -1088,11 +1098,12 @@ async function approve(id,el){
       const tags=p.tags.map(tagOf).filter(Boolean); let title=p.title;
       if(tags.length>1){const missing=tags.filter(t=>!title.includes(t.name)).map(t=>t.name); if(missing.length) title+=' — '+missing.join(' ו');}
       const dest=p.shared?targetCal(p):{id:'',name:'היומן האישי שלך'};
-      const r=await api('createEvent',{title,start:p.start,end:p.end,location:p.location||'',description:'נוצר על ידי העוזר של '+S.cfg.me,calendarId:dest.id,reminders:reminderList()});
+      const forWho=(p.people||[]).length?'אחראי: '+p.people.join(', ')+String.fromCharCode(10):'';
+      const r=await api('createEvent',{title,start:p.start,end:p.end,location:p.location||'',description:forWho+'נוצר על ידי העוזר של '+S.cfg.me,calendarId:dest.id,reminders:reminderList()});
       addLog('נקבע ב'+dest.name+': '+title+' ('+describe(p).meta+')',{by:'באישורך',undoable:true,eventId:r.id,calendarId:dest.id});
       await loadAgenda();
     } else if(p.type==='task'){
-      const t={id:'t'+Date.now(),title:p.title,tags:p.tags||[],shared:!!p.shared,author:S.cfg.me,importance:p.importance||'normal',due:p.due||ymd(new Date()),mit:!!p.mit,done:'',synced:demo()};
+      const t={id:'t'+Date.now(),title:p.title,tags:p.tags||[],people:p.people||[],shared:!!p.shared,author:S.cfg.me,importance:p.importance||'normal',due:p.due||ymd(new Date()),mit:!!p.mit,done:'',synced:demo()};
       let dropped=false;
       if(t.mit&&S.tasks.filter(x=>x.mit&&!x.done).length>=S.cfg.mitmax){ t.mit=false; dropped=true; }
       S.tasks.push(t); save('tasks',S.tasks); renderTasks();
@@ -1235,6 +1246,16 @@ document.querySelectorAll('.quick button').forEach(b=>b.addEventListener('click'
 
 $('msgs').addEventListener('click',e=>{
   const v=e.target.closest('button[data-vis]');
+  const who=e.target.closest('button[data-who]');
+  if(who){
+    const el=who.closest('.prop'); const p=S.pending[el.dataset.id]; if(!p) return;
+    p.people=p.people||[];
+    const n=who.dataset.who; const i=p.people.indexOf(n);
+    if(i>=0) p.people.splice(i,1); else p.people.push(n);
+    who.setAttribute('aria-pressed', i>=0?'false':'true');
+    const lbl=el.querySelector('.who4 .lbl'); if(lbl) lbl.textContent=((p.tags||[]).length||p.people.length)?'שויך אל':'למי זה שייך?';
+    return;
+  }
   const kid=e.target.closest('button[data-kid]');
   if(kid){
     const el=kid.closest('.prop'); const p=S.pending[el.dataset.id]; if(!p) return;
@@ -1244,7 +1265,7 @@ $('msgs').addEventListener('click',e=>{
     kid.setAttribute('aria-pressed', i>=0?'false':'true');
     // פריט ששייך לילד הוא משותף. אפשר עדיין להחליף ידנית.
     if(p.tags.length && !p.shared){ p.shared=true; el.querySelectorAll('button[data-vis]').forEach(x=>x.setAttribute('aria-pressed', x.dataset.vis==='1')); }
-    const lbl=el.querySelector('.who4 .lbl'); if(lbl) lbl.textContent = p.tags.length?'שויך אל':'למי זה שייך?';
+    const lbl=el.querySelector('.who4 .lbl'); if(lbl) lbl.textContent = (p.tags.length||(p.people||[]).length)?'שויך אל':'למי זה שייך?';
     updateDest(el,p);
     return;
   }
@@ -1305,7 +1326,7 @@ $('digesttest').addEventListener('click',async()=>{
 
 $('save').addEventListener('click',()=>{
   S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.familyCalendarId=$('famcal').value;
-  S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
+  S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.partnerName=$('pname').value.trim(); S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
   S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
   save('cfg',S.cfg); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
 });
