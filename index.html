@@ -409,6 +409,8 @@ details[open]>summary{border-bottom:1px solid var(--line)}
         <button class="btn ghost" id="diag">העתק אבחון התקנה</button>
         <div class="status" id="installstat"></div>
         <div class="note">גרסת הדף במכשיר הזה: <b id="buildstamp"></b></div>
+        <button class="btn ghost" id="forceupd">אלץ עדכון לגרסה האחרונה</button>
+        <div class="note">מנקה את המטמון של האפליקציה במכשיר וטוען מחדש. ההגדרות והמטלות שלכם לא נמחקות.</div>
         <div class="note">התקנה נותנת אייקון משלה ופתיחה במסך מלא, בלי שורת הכתובת של הדפדפן. אם הכפתור אינו זמין, הכיתוב שמעליו מסביר מה חסר.</div>
       </div>
     </div>
@@ -504,7 +506,14 @@ const $=id=>document.getElementById(id);
 // נרשם מוקדם ככל האפשר: יעד השיתוף מווטסאפ עובד רק דרך הסרוויס וורקר.
 // עד שהוא פעיל, POST אל ./share נוחת על 404 של גיטהאב — ולכן יש גם 404.html שמחזיר לאפליקציה.
 let swError='';
-if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(e=>{ swError=String(e.message||e); }); }
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(e=>{ swError=String(e.message||e); });
+  // בלי זה המכשיר ממשיך להריץ את הגרסה הישנה עד רענון ידני נוסף
+  let reloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(reloaded) return; reloaded=true; location.reload();
+  });
+}
 else { swError='הדפדפן הזה לא תומך בסרוויס וורקר'; }
 
 // כרום שולח את האירוע הזה רק כשכל תנאי ההתקנה מתקיימים. תופסים אותו מוקדם,
@@ -553,6 +562,19 @@ async function doInstall(){
 }
 $('ibtn').addEventListener('click', doInstall);
 $('ilater').addEventListener('click', ()=>{ localStorage.setItem('assist:noinstall','1'); $('ibanner').hidden=true; });
+// מסלול מילוט כשהמכשיר תקוע על גרסה ישנה. לא נוגע בהגדרות ובמטלות,
+// שיושבות באחסון המקומי ולא במטמון.
+$('forceupd').addEventListener('click', async ()=>{
+  const st=$('installstat'); st.textContent='מנקה...';
+  try{
+    for(const n of await caches.keys()){ if(n.startsWith('assist-v')) await caches.delete(n); }
+    if(navigator.serviceWorker){
+      for(const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    }
+  }catch(e){}
+  st.textContent='נוקה. טוען מחדש...';
+  setTimeout(()=>location.replace(location.pathname+'?v='+Date.now()),500);
+});
 $('diag').addEventListener('click', async ()=>{
   const d=[];
   d.push('דפדפן: '+navigator.userAgent);
