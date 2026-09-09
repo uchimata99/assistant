@@ -10,3 +10,5 @@ Thumbs.db
 # מזהה הפרויקט באפס סקריפט שונה בכל חשבון גוגל — לא נדחף
 .clasp.json
 apps_script/.clasp.json
+
+apps_script/.clasp-*.json
