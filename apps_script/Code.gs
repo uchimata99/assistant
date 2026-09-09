@@ -41,6 +41,7 @@ function doPost(e) {
       case 'calendars':      return json_({ calendars: calendars_() });
       case 'colors':         return json_(colors_());
       case 'shareCalendar':  return json_(shareCalendar_(b));
+      case 'shareAll':       return json_(shareAllCalendars_());
       case 'updateCalendar': return json_(updateCalendar_(b));
       case 'deleteCalendar': return json_(deleteCalendar_(b));
       case 'createCalendar': return json_(createCalendar_(b));
@@ -103,12 +104,28 @@ function createCalendar_(b) {
   return { ok: true, id: c.getId(), name: c.getName(), shared: shared };
 }
 function shareCalendar_(b) {
-  if (!b.id || !b.email) throw new Error('חסר יומן או כתובת');
+  // הכתובת מגיעה מהכספת. האפליקציה אינה שולחת אותה, כדי שלא תשב בקוד הציבורי.
+  const email = b.email || PROPS.getProperty('PARTNER_EMAIL');
+  if (!b.id) throw new Error('חסר מזהה יומן');
+  if (!email) throw new Error('לא הוגדר PARTNER_EMAIL במאפייני הסקריפט');
   const c = CalendarApp.getCalendarById(b.id);
   if (!c) throw new Error('לא נמצא יומן כזה');
-  c.addEditor(String(b.email));
-  log_('shareCalendar', c.getName() + ' · ' + b.email);
-  return { ok: true };
+  c.addEditor(String(email));
+  log_('shareCalendar', c.getName() + ' · ' + email);
+  return { ok: true, email: String(email), name: c.getName() };
+}
+// משתף בבת אחת את כל היומנים שאינם היומן האישי הראשי.
+function shareAllCalendars_() {
+  const email = PROPS.getProperty('PARTNER_EMAIL');
+  if (!email) throw new Error('לא הוגדר PARTNER_EMAIL במאפייני הסקריפט');
+  const done = [], failed = [];
+  CalendarApp.getAllOwnedCalendars().forEach(c => {
+    if (c.isMyPrimaryCalendar()) return;
+    try { c.addEditor(email); done.push(c.getName()); }
+    catch (err) { failed.push(c.getName() + ': ' + err.message); }
+  });
+  log_('shareCalendar', 'שיתוף מרוכז עם ' + email + ' · ' + done.length + ' יומנים');
+  return { ok: true, email: email, shared: done, failed: failed };
 }
 function updateCalendar_(b) {
   if (!b.id) throw new Error('חסר מזהה יומן');

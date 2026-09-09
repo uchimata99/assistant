@@ -351,6 +351,8 @@ details[open]>summary{border-bottom:1px solid var(--line)}
         <div id="calendars"></div>
         <div class="note">אלה היומנים בחשבון גוגל שלך. שינוי שם או צבע נכתב ישירות ליומן גוגל. מחיקה מוחקת את היומן ואת כל האירועים שבו, ואי אפשר לבטל אותה.</div>
         <button class="btn ghost" id="calrefresh">רענן רשימה</button>
+        <button class="btn ghost" id="calshareall">שתף את כל היומנים עם בן/בת הזוג</button>
+        <div class="note">משתף את כל היומנים חוץ מהיומן האישי הראשי: הילדים, המשפחה, וכל יומן אחר שיצרתם. הכתובת מוגדרת בשרת.</div>
       </div>
     </div>
 
@@ -905,6 +907,16 @@ async function refreshCalendars(){
   catch(err){ toast('לא הצלחתי לקרוא: '+err.message); }
 }
 $('calrefresh').addEventListener('click',refreshCalendars);
+$('calshareall').addEventListener('click',async ()=>{
+  const b=$('calshareall');
+  if(demo()){ toast('מצב הדגמה — צריך שרת מחובר.'); return; }
+  b.textContent='משתף...';
+  try{ const r=await api('shareAll');
+       addLog('שותפו '+r.shared.length+' יומנים עם '+r.email);
+       toast('שותפו '+r.shared.length+' יומנים'+(r.failed.length?' · '+r.failed.length+' נכשלו':''));
+       b.textContent='שתף את כל היומנים עם בן/בת הזוג'; }
+  catch(err){ b.textContent='שתף את כל היומנים עם בן/בת הזוג'; toast('לא שותף: '+err.message); }
+});
 $('calendars').addEventListener('click',async e=>{
   const b=e.target.closest('button'); if(!b) return;
   const row=b.closest('.calrow'); if(!row) return;
