@@ -236,6 +236,10 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 .calrow .acts{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
 .calrow .acts button{padding:8px 12px;border-radius:var(--r-2);background:var(--field);color:var(--ink-2);font-size:var(--fs-2);min-height:44px}
 .calrow .acts button.danger{color:var(--err)}
+.tagrow .dob{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tagrow .dob label{font-size:var(--fs-2);color:var(--ink-2);font-weight:400;margin:0}
+.tagrow .dob input{width:auto;flex:1;min-width:150px}
+.tagrow .dob span{font-size:var(--fs-2);color:var(--ink-2)}
 .calrow .acts button[data-armed="1"]{background:var(--err);color:var(--on-ink)}
 .calrow .primary{grid-column:1/-1;color:var(--ink-2);font-size:var(--fs-1)}
 .tagrow .calrow{grid-column:1/-1;display:flex;gap:6px;align-items:center}
@@ -953,14 +957,34 @@ function renderTags(){
       ${swatch(t)}
       <input type="text" value="${esc(t.name)}" data-f="name" placeholder="שם" aria-label="שם">
       <input type="text" value="${esc(t.aliases.join(', '))}" data-f="aliases" placeholder="כינויים, בפסיקים" aria-label="כינויים">
+      <div class="dob"><label>תאריך לידה</label><input type="date" value="${esc(t.dob||'')}" data-f="dob" aria-label="תאריך לידה"><span>${t.dob?ageOf(t.dob)+' · כיתה '+gradeOf(t.dob):'לא הוזן'}</span></div>
       ${palHtml(t)}
       <div class="calrow"><select data-f="cal" aria-label="יומן">${calOptions(t.calendarId)}</select>${t.calendarId?'':`<button class="mini" data-act="mkcal">צור יומן</button>`}<button class="mini x" data-act="deltag" aria-label="מחק">×</button></div>
     </div>`).join('')+`<button class="btn ghost" id="addtag">הוסף ילד</button>`;
   $('famcal').innerHTML=calOptions(S.cfg.familyCalendarId);
 }
+// גיל וכיתה מחושבים מתאריך הלידה בכל פעם מחדש. שמירת גיל הייתה מתיישנת בשקט.
+function ageOf(dob){
+  if(!dob) return null;
+  const b=new Date(dob); if(isNaN(b)) return null;
+  const n=new Date(); let a=n.getFullYear()-b.getFullYear();
+  const m=n.getMonth()-b.getMonth();
+  if(m<0||(m===0&&n.getDate()<b.getDate())) a--;
+  return a;
+}
+// שנת הלימודים בישראל מתחילה בספטמבר, וכיתה א מתחילה בגיל שש.
+function gradeOf(dob){
+  const a=ageOf(dob); if(a===null) return '';
+  const n=new Date();
+  const started = n.getMonth()>=8 ? a : a-0; // ספטמבר ואילך: הגיל הנוכחי הוא גיל השנה
+  const g=started-5;
+  if(g<1) return g===0?'טרום חובה':'גן';
+  const names=['א','ב','ג','ד','ה','ו','ז','ח','ט','י','יא','יב'];
+  return g<=12 ? names[g-1] : 'מעל יב';
+}
 function readTagsFromForm(){
   return [...document.querySelectorAll('#tags .tagrow')].map((row,i)=>{const old=S.cfg.tags[i]||{};const name=row.querySelector('[data-f=name]').value.trim();
-    return {key:old.key||('t'+Date.now()+i),name:name||old.name||'ללא שם',color:row.dataset.color||(row.querySelector('input[type=color]')||{}).value||old.color||'#4986e7',aliases:row.querySelector('[data-f=aliases]').value.split(',').map(s=>s.trim()).filter(Boolean),calendarId:row.querySelector('[data-f=cal]').value};});
+    return {key:old.key||('t'+Date.now()+i),name:name||old.name||'ללא שם',color:row.dataset.color||(row.querySelector('input[type=color]')||{}).value||old.color||'#4986e7',aliases:row.querySelector('[data-f=aliases]').value.split(',').map(s=>s.trim()).filter(Boolean),dob:row.querySelector('[data-f=dob]').value||'',calendarId:row.querySelector('[data-f=cal]').value};});
 }
 function renderSettings(){
   renderInstall();
@@ -1088,7 +1112,7 @@ async function send(text){
     const ctx={
       me:S.cfg.me, gender:S.cfg.gender, now:now.toISOString(), tz:Intl.DateTimeFormat().resolvedOptions().timeZone,
 
-      tags:S.cfg.tags.map(t=>({name:t.name,aliases:t.aliases,hasCalendar:!!t.calendarId})),
+      tags:S.cfg.tags.map(t=>({name:t.name,aliases:t.aliases,age:ageOf(t.dob),grade:gradeOf(t.dob)||null,hasCalendar:!!t.calendarId})),
       hasFamilyCalendar:!!S.cfg.familyCalendarId, mitmax:S.cfg.mitmax,
       tasks:S.tasks.filter(t=>!t.done).map(t=>({title:t.title,tags:(t.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!t.shared,author:t.author,importance:t.importance,due:t.due,mit:!!t.mit})),
       events:S.events.filter(e=>{const d=new Date(e.start);return d>new Date(now.getTime()-2*3600e3)&&d<new Date(now.getTime()+8*86400e3);}).map(e=>({title:e.title,start:e.start,end:e.end,location:e.location,tags:(e.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!e.shared})),
