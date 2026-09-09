@@ -40,8 +40,6 @@ function doPost(e) {
       case 'agenda':         return json_(agenda_(b.days || 35));
       case 'calendars':      return json_({ calendars: calendars_() });
       case 'colors':         return json_(colors_());
-      case 'feedback':       return json_(feedback_(b));
-      case 'feedbackList':   return json_(feedbackList_());
       case 'shareCalendar':  return json_(shareCalendar_(b));
       case 'shareAll':       return json_(shareAllCalendars_());
       case 'updateCalendar': return json_(updateCalendar_(b));
@@ -98,27 +96,6 @@ function shareCal_(calendarId, email) {
 }
 // בקשות שינוי מהמשתמשים. נכתבות לגיליון המשותף, כדי ששני בני הזוג יראו את אותה רשימה
 // וכדי שאפשר יהיה לקרוא אותן בסשן עבודה הבא בלי לתלות את זה בזיכרון של מישהו.
-function feedback_(b) {
-  const text = String(b.text || '').trim();
-  if (!text) throw new Error('אין מה לשלוח');
-  const sid = PROPS.getProperty('SHARED_SHEET_ID');
-  if (!sid) throw new Error('לא מוגדר גיליון משותף');
-  const ss = SpreadsheetApp.openById(sid);
-  let sh = ss.getSheetByName('בקשות שינוי');
-  if (!sh) { sh = ss.insertSheet('בקשות שינוי'); sh.appendRow(['זמן', 'מי', 'מסך', 'הבקשה', 'טופל']); }
-  sh.appendRow([new Date(), String(b.who || ''), String(b.screen || ''), text, '']);
-  log_('feedback', text.slice(0, 120));
-  return { ok: true };
-}
-function feedbackList_() {
-  const sid = PROPS.getProperty('SHARED_SHEET_ID');
-  if (!sid) return { items: [] };
-  const ss = SpreadsheetApp.openById(sid);
-  const sh = ss.getSheetByName('בקשות שינוי');
-  if (!sh || sh.getLastRow() < 2) return { items: [] };
-  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
-  return { items: rows.map(r => ({ at: r[0], who: r[1], screen: r[2], text: r[3], done: !!r[4] })).reverse().slice(0, 50) };
-}
 function colors_() {
   const r = UrlFetchApp.fetch('https://www.googleapis.com/calendar/v3/colors', {
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
