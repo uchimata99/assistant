@@ -142,6 +142,15 @@ function ensureShared_() {
       try { shareCal_(c.getId(), email); n++; } catch (err) {}
     });
   } catch (err) {}
+  // גם הגיליון המשותף. בגיליון addEditor כן קיים, בשונה מיומן.
+  const sid = PROPS.getProperty('SHARED_SHEET_ID');
+  if (sid) {
+    try {
+      const ss = SpreadsheetApp.openById(sid);
+      const has = ss.getEditors().some(u => u.getEmail() === email);
+      if (!has) { ss.addEditor(email); n++; }
+    } catch (err) {}
+  }
   return n;
 }
 function shareAllCalendars_() {
