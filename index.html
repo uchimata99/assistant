@@ -204,8 +204,20 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .prop .vis button{padding:6px 12px;border-radius:999px;background:var(--paper);font-size:14px;color:var(--ink-2);display:flex;align-items:center;gap:5px}
 .prop .vis button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
 .prop .vis svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+.prop .rep{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;background:var(--field);color:var(--ink-2);border:1px solid var(--line);margin-inline-start:6px;vertical-align:middle}
+.prop .rep svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2}
+.prop .warn{margin-top:8px;font-size:14px;font-weight:600;color:var(--warn,#B4552B)}
+.prop .warn:empty{display:none}
+.prop .edit{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;display:grid;gap:8px}
+.prop .edit label{display:grid;gap:3px;font-size:var(--fs-2);color:var(--ink-2)}
+.prop .edit input,.prop .edit select,.prop .edit textarea{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--field);color:var(--ink);font:inherit;font-size:var(--fs-2);min-height:42px}
+.prop .edit .r{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.prop .edit .r3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px}
+.prop.done .edit{display:none}
 .prop .acts{display:flex;gap:8px;margin-top:10px}
 .prop .acts button{flex:1;padding:10px;border-radius:10px;font-weight:700}
+.prop .acts .fix{flex:0 0 auto;padding:10px 14px;background:var(--paper);color:var(--ink-2);font-weight:600}
+.prop .acts .fix[aria-pressed="true"]{background:var(--field);color:var(--ink)}
 .prop .yes{background:var(--accent);color:#fff}
 .prop .no{background:var(--paper);color:var(--ink-2)}
 .prop.done{opacity:.55}
@@ -641,6 +653,25 @@ const hhmm=d=>pad(d.getHours())+':'+pad(d.getMinutes());
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const SHARE_ICON='<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-5-6.3"/></svg>';
+const REPEAT_ICON='<svg viewBox="0 0 24 24"><path d="M4 9a6 6 0 0 1 6-6h9M20 15a6 6 0 0 1-6 6H5"/><path d="M16 1l3 2-3 2M8 19l-3 2 3 2"/></svg>';
+const FREQ_HE={daily:'כל יום',weekly:'כל שבוע',monthly:'כל חודש'};
+// שדות date ו-time עובדים בשעון המקומי, ולכן ההמרה עוברת דרך מרכיבים ולא דרך UTC.
+const dpart=iso=>ymd(new Date(iso));
+const tpart=iso=>hhmm(new Date(iso));
+function mkISO(dstr,tstr){
+  const [y,m,d]=String(dstr||'').split('-').map(Number);
+  const [h,mi]=String(tstr||'').split(':').map(Number);
+  if([y,m,d,h,mi].some(n=>isNaN(n))) return null;
+  return new Date(y,m-1,d,h,mi,0,0).toISOString();
+}
+const shortDate=v=>{const [y,m,d]=String(v||'').split('-');return d?(+d)+'.'+(+m):'';};
+function repChip(p){
+  const r=p&&p.repeat;
+  if(!r||!r.freq) return '';
+  return `<span class="rep">${REPEAT_ICON}חוזר · ${FREQ_HE[r.freq]||''}${r.until?' · עד '+shortDate(r.until):''}</span>`;
+}
+// חזרתי בלי סוף נמשך לנצח ביומן. לכן אין אישור עד שנקבע עד מתי.
+function repWarn(p){ const r=p&&p.repeat; return (r&&r.freq&&!r.until)?'אירוע חוזר — צריך לקבוע עד מתי לפני האישור.':''; }
 const LOCK_ICON='<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 
 // צבע שנבחר ביומן גוגל לא בהכרח נראה על המשטח שלנו. נמדד שרוב הפלטה של גוגל
@@ -1119,6 +1150,63 @@ function closeChat(){ $('chat').classList.remove('open'); $('chat').setAttribute
 function scrollMsgs(){ const m=$('msgs'); requestAnimationFrame(()=>m.scrollTop=m.scrollHeight); }
 function addMsg(text,who,imgs){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text; (imgs||[]).forEach(src=>{const im=document.createElement('img'); im.src=src; d.appendChild(im);}); $('msgs').appendChild(d); scrollMsgs(); return d; }
 
+// עריכה בתוך הכרטיס: כשהשעה שהוצעה לא טובה מתקנים אותה כאן, בלי לנסח מחדש את הבקשה.
+function editForm(p){
+  if(p.type==='event'){
+    const r=p.repeat||{};
+    return `<div class="edit" hidden>
+      <label>כותרת<input type="text" data-e="title" value="${esc(p.title||'')}"></label>
+      <div class="r3">
+        <label>תאריך<input type="date" data-e="date" value="${dpart(p.start)}"></label>
+        <label>משעה<input type="time" data-e="from" value="${tpart(p.start)}"></label>
+        <label>עד שעה<input type="time" data-e="to" value="${tpart(p.end)}"></label>
+      </div>
+      <label>מיקום<input type="text" data-e="location" value="${esc(p.location||'')}"></label>
+      <div class="r">
+        <label>חוזר<select data-e="freq">
+          <option value="">לא חוזר</option>
+          <option value="daily" ${r.freq==='daily'?'selected':''}>כל יום</option>
+          <option value="weekly" ${r.freq==='weekly'?'selected':''}>כל שבוע</option>
+          <option value="monthly" ${r.freq==='monthly'?'selected':''}>כל חודש</option>
+        </select></label>
+        <label>עד תאריך<input type="date" data-e="until" value="${esc(r.until||'')}"></label>
+      </div>
+    </div>`;
+  }
+  if(p.type==='task'){
+    return `<div class="edit" hidden>
+      <label>כותרת<input type="text" data-e="title" value="${esc(p.title||'')}"></label>
+      <div class="r">
+        <label>עד תאריך<input type="date" data-e="due" value="${esc(p.due||'')}"></label>
+        <label>חשיבות<select data-e="importance">
+          <option value="normal" ${p.importance!=='high'?'selected':''}>רגילה</option>
+          <option value="high" ${p.importance==='high'?'selected':''}>חשובה</option>
+        </select></label>
+      </div>
+    </div>`;
+  }
+  if(p.type==='email_draft'){
+    return `<div class="edit" hidden>
+      <label>אל<input type="text" class="ltr" data-e="to" value="${esc(p.to||'')}"></label>
+      <label>נושא<input type="text" data-e="subject" value="${esc(p.subject||'')}"></label>
+      <label>תוכן<textarea data-e="body" rows="5">${esc(p.body||'')}</textarea></label>
+    </div>`;
+  }
+  return '';
+}
+// אחרי כל עריכה מרעננים את מה שמוצג, כדי שהכרטיס לא יבטיח דבר אחד ויבצע אחר.
+function refreshProp(el,p){
+  const d=describe(p); const h=accentOf(p);
+  el.style.setProperty('--hat',h.color);
+  const kd=el.querySelector('.kind');
+  if(kd) kd.innerHTML=`<span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)} · ${esc(d.kind)}`;
+  const pt=el.querySelector('.pt'); if(pt) pt.innerHTML=esc(d.title)+repChip(p)+tagChips(p.tags);
+  const pm=el.querySelector('.pm'); if(pm) pm.textContent=d.meta;
+  const w=el.querySelector('.warn'); if(w) w.textContent=repWarn(p);
+  const lbl=el.querySelector('.who4 .lbl');
+  if(lbl) lbl.textContent=((p.tags||[]).length||(p.people||[]).length)?'שויך אל':'למי זה שייך?';
+  updateDest(el,p);
+}
 function describe(p){
   if(p.type==='event'){const s=new Date(p.start),e=new Date(p.end);return {kind:'פגישה ביומן',title:p.title,meta:`יום ${HE_DAYS[s.getDay()]} ${s.getDate()}.${s.getMonth()+1} · ${hhmm(s)}–${hhmm(e)}${p.location?' · '+p.location:''}`};}
   if(p.type==='task') return {kind:'מטלה',title:p.title,meta:(p.importance==='high'?'חשוב · ':'')+(p.mit?'מהותית להיום · ':'')+(p.due?'עד '+p.due:'')};
@@ -1144,7 +1232,7 @@ function addProposal(p){
   const el=document.createElement('div'); el.className='prop'; el.style.setProperty('--hat',h.color); el.dataset.id=id;
   const canShare=p.type!=='email_draft';
   el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)} · ${esc(d.kind)}</div>
-    <div class="pt">${esc(d.title)}${tagChips(p.tags)}</div><div class="pm">${esc(d.meta)}</div>
+    <div class="pt">${esc(d.title)}${repChip(p)}${tagChips(p.tags)}</div><div class="pm">${esc(d.meta)}</div>
     ${p.why?`<div class="why">${esc(p.why)}</div>`:''}
     <div class="who4">
       <span class="lbl">${((p.tags||[]).length||(p.people||[]).length)?'שויך אל':'למי זה שייך?'}</span>
@@ -1152,22 +1240,35 @@ function addProposal(p){
       ${peopleNames().map(n=>`<button class="grown" data-who="${esc(n)}" aria-pressed="${(p.people||[]).includes(n)}">${esc(n)}</button>`).join('')}
     </div>
     ${canShare?`<div class="vis"><button data-vis="0" aria-pressed="${!p.shared}">${LOCK_ICON}פרטי</button><button data-vis="1" aria-pressed="${p.shared}">${SHARE_ICON}משותף</button><span class="status dest"></span></div>`:''}
-    <div class="acts"><button class="yes" data-act="approve">${T().approve}</button><button class="no" data-act="reject">לא עכשיו</button></div>
+    <div class="warn">${esc(repWarn(p))}</div>
+    ${editForm(p)}
+    <div class="acts"><button class="yes" data-act="approve">${T().approve}</button><button class="fix" data-act="edit" aria-pressed="false">ערוך</button><button class="no" data-act="reject">לא עכשיו</button></div>
     <div class="status"></div>`;
-  $('msgs').appendChild(el); updateDest(el,p); scrollMsgs();
+  $('msgs').appendChild(el); updateDest(el,p);
+  // חזרתי בלי "עד מתי" — פותחים את העריכה מיד, כי בלי זה אי אפשר לאשר.
+  if(repWarn(p)){ const ed=el.querySelector('.edit'); if(ed){ ed.hidden=false; el.querySelector('.fix').setAttribute('aria-pressed','true'); } }
+  scrollMsgs();
 }
 function updateDest(el,p){ const d=el.querySelector('.dest'); if(!d) return; d.textContent = p.type==='event' ? (p.shared?targetCal(p).name:'היומן האישי שלך') : (p.shared?'ברשימה המשותפת':'רק אצלך'); }
 
 async function approve(id,el){
-  const p=S.pending[id]; if(!p) return; const st=el.querySelector('.status:not(.dest)'); st.textContent='מבצע...';
+  const p=S.pending[id]; if(!p) return; const st=el.querySelector('.status:not(.dest)');
+  if(repWarn(p)){
+    st.textContent=repWarn(p);
+    const ed=el.querySelector('.edit'); if(ed){ ed.hidden=false; el.querySelector('.fix').setAttribute('aria-pressed','true'); }
+    const u=el.querySelector('[data-e="until"]'); if(u) u.focus();
+    return;
+  }
+  st.textContent='מבצע...';
   try{
     if(p.type==='event'){
       const tags=p.tags.map(tagOf).filter(Boolean); let title=p.title;
       if(tags.length>1){const missing=tags.filter(t=>!title.includes(t.name)).map(t=>t.name); if(missing.length) title+=' — '+missing.join(' ו');}
       const dest=p.shared?targetCal(p):{id:'',name:'היומן האישי שלך'};
       const forWho=(p.people||[]).length?'אחראי: '+p.people.join(', ')+String.fromCharCode(10):'';
-      const r=await api('createEvent',{title,start:p.start,end:p.end,location:p.location||'',description:forWho+'נוצר על ידי העוזר של '+S.cfg.me,calendarId:dest.id,reminders:reminderList()});
-      addLog('נקבע ב'+dest.name+': '+title+' ('+describe(p).meta+')',{by:'באישורך',undoable:true,eventId:r.id,calendarId:dest.id});
+      const rep=(p.repeat&&p.repeat.freq&&p.repeat.until)?p.repeat:null;
+      const r=await api('createEvent',{title,start:p.start,end:p.end,location:p.location||'',description:forWho+'נוצר על ידי העוזר של '+S.cfg.me,calendarId:dest.id,reminders:reminderList(),repeat:rep});
+      addLog('נקבע ב'+dest.name+': '+title+' ('+describe(p).meta+(rep?' · חוזר '+(FREQ_HE[rep.freq]||'')+' עד '+shortDate(rep.until):'')+')',{by:'באישורך',undoable:true,eventId:r.id,calendarId:dest.id,series:!!r.series});
       await loadAgenda();
     } else if(p.type==='task'){
       const t={id:'t'+Date.now(),title:p.title,tags:p.tags||[],people:p.people||[],shared:!!p.shared,author:S.cfg.me,importance:p.importance||'normal',due:p.due||ymd(new Date()),mit:!!p.mit,done:'',synced:demo()};
@@ -1311,6 +1412,35 @@ $('mic').addEventListener('click',toggleMic);
 $('closechat').addEventListener('click',closeChat);
 document.querySelectorAll('.quick button').forEach(b=>b.addEventListener('click',()=>send(b.dataset.q)));
 
+$('msgs').addEventListener('input',e=>{
+  const f=e.target.closest('[data-e]'); if(!f) return;
+  const el=f.closest('.prop'); if(!el) return;
+  const p=S.pending[el.dataset.id]; if(!p) return;
+  const val=k=>{ const x=el.querySelector('[data-e="'+k+'"]'); return x?x.value:''; };
+  const k=f.dataset.e;
+  if(p.type==='event'){
+    if(k==='date'||k==='from'){
+      // שינוי התחלה מזיז את הסוף באותו הפרש, כמו בכל יומן. משך האירוע נשמר.
+      const dur=Math.max(3e5,new Date(p.end)-new Date(p.start));
+      const st=mkISO(val('date'),val('from'));
+      if(st){ p.start=st; p.end=new Date(new Date(st).getTime()+dur).toISOString();
+              const to=el.querySelector('[data-e="to"]'); if(to) to.value=tpart(p.end); }
+    } else if(k==='to'){
+      let en=mkISO(val('date'),val('to'));
+      if(en){
+        // סוף לפני התחלה הוא שעה שגויה, לא כוונה. מיישרים לשעה אחת.
+        if(new Date(en)<=new Date(p.start)) en=new Date(new Date(p.start).getTime()+36e5).toISOString();
+        p.end=en; f.value=tpart(p.end);
+      }
+    } else if(k==='freq'){
+      p.repeat=f.value?{freq:f.value,until:(p.repeat&&p.repeat.until)||''}:null;
+    } else if(k==='until'){
+      if(p.repeat) p.repeat.until=f.value;
+    } else p[k]=f.value;
+  } else p[k]=f.value;
+  refreshProp(el,p);
+});
+
 $('msgs').addEventListener('click',e=>{
   const v=e.target.closest('button[data-vis]');
   const who=e.target.closest('button[data-who]');
@@ -1320,7 +1450,7 @@ $('msgs').addEventListener('click',e=>{
     const n=who.dataset.who; const i=p.people.indexOf(n);
     if(i>=0) p.people.splice(i,1); else p.people.push(n);
     who.setAttribute('aria-pressed', i>=0?'false':'true');
-    const lbl=el.querySelector('.who4 .lbl'); if(lbl) lbl.textContent=((p.tags||[]).length||p.people.length)?'שויך אל':'למי זה שייך?';
+    refreshProp(el,p);
     return;
   }
   const kid=e.target.closest('button[data-kid]');
@@ -1332,13 +1462,13 @@ $('msgs').addEventListener('click',e=>{
     kid.setAttribute('aria-pressed', i>=0?'false':'true');
     // פריט ששייך לילד הוא משותף. אפשר עדיין להחליף ידנית.
     if(p.tags.length && !p.shared){ p.shared=true; el.querySelectorAll('button[data-vis]').forEach(x=>x.setAttribute('aria-pressed', x.dataset.vis==='1')); }
-    const lbl=el.querySelector('.who4 .lbl'); if(lbl) lbl.textContent = (p.tags.length||(p.people||[]).length)?'שויך אל':'למי זה שייך?';
-    updateDest(el,p);
+    refreshProp(el,p);
     return;
   }
   if(v){const el=v.closest('.prop');const p=S.pending[el.dataset.id];if(!p)return;p.shared=v.dataset.vis==='1';el.querySelectorAll('button[data-vis]').forEach(x=>x.setAttribute('aria-pressed',x===v));updateDest(el,p);return;}
   const b=e.target.closest('button[data-act]'); if(!b) return;
   const el=b.closest('.prop'); const id=el.dataset.id;
+  if(b.dataset.act==='edit'){ const ed=el.querySelector('.edit'); if(!ed) return; ed.hidden=!ed.hidden; b.setAttribute('aria-pressed',String(!ed.hidden)); return; }
   if(b.dataset.act==='approve') approve(id,el);
   else{el.classList.add('done');el.querySelector('.status:not(.dest)').textContent='נדחה';addLog('נדחתה הצעה: '+describe(S.pending[id]).title);delete S.pending[id];}
 });
@@ -1376,7 +1506,7 @@ $('logsrc').addEventListener('click',e=>{
 });
 $('log').addEventListener('click',async e=>{
   const b=e.target.closest('.undo'); if(!b) return; const l=S.log[+b.dataset.i]; if(!l||!l.eventId) return; b.textContent='מבטל...';
-  try{await api('deleteEvent',{id:l.eventId,calendarId:l.calendarId||''});l.undone=true;save('log',S.log);addLog('בוטל: '+l.text);await loadAgenda();}
+  try{await api('deleteEvent',{id:l.eventId,calendarId:l.calendarId||'',series:!!l.series});l.undone=true;save('log',S.log);addLog('בוטל: '+l.text);await loadAgenda();}
   catch(err){toast('הביטול נכשל: '+err.message);renderLog();}
 });
 

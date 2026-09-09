@@ -48,7 +48,7 @@ function doPost(e) {
       case 'deleteCalendar': return json_(deleteCalendar_(b));
       case 'createCalendar': return json_(createCalendar_(b));
       case 'createEvent':    return json_(createEvent_(b));
-      case 'deleteEvent':    return json_(deleteEvent_(b.id, b.calendarId));
+      case 'deleteEvent':    return json_(deleteEvent_(b.id, b.calendarId, b.series));
       case 'tasks':          return json_({ tasks: listTasks_() });
       case 'addTask':        return json_(addTask_(b));
       case 'updateTask':     return json_(updateTask_(b));
@@ -228,7 +228,23 @@ function agenda_(days) {
 }
 function createEvent_(b) {
   const cal = calById_(b.calendarId);
-  const ev = cal.createEvent(b.title, new Date(b.start), new Date(b.end), { location: b.location || '', description: b.description || '' });
+  const opts = { location: b.location || '', description: b.description || '' };
+  const r = b.repeat;
+  // אירוע חוזר נוצר כסדרה, ורק כשיש תאריך סיום. סדרה בלי סוף ממשיכה לנצח,
+  // ולכן האפליקציה חוסמת אישור בלי "עד מתי", והשרת מסרב גם הוא.
+  if (r && r.freq) {
+    if (!r.until) throw new Error('אירוע חוזר חייב תאריך סיום');
+    let rule = CalendarApp.newRecurrence();
+    rule = r.freq === 'daily' ? rule.addDailyRule()
+         : r.freq === 'monthly' ? rule.addMonthlyRule()
+         : rule.addWeeklyRule();
+    rule = rule.until(new Date(String(r.until) + 'T23:59:59'));
+    const es = cal.createEventSeries(b.title, new Date(b.start), new Date(b.end), rule, opts);
+    applyReminders_(es, b.reminders);
+    log_('createEvent', cal.getName() + ' | ' + b.title + ' ' + b.start + ' (חוזר עד ' + r.until + ')', es.getId(), cal.getId());
+    return { ok: true, id: es.getId(), calendarId: cal.getId(), series: true };
+  }
+  const ev = cal.createEvent(b.title, new Date(b.start), new Date(b.end), opts);
   // התראות: קופצות באפליקציית יומן גוגל בטלפון. זה ערוץ ההתראות היחיד שלא דורש תשתית נוספת.
   applyReminders_(ev, b.reminders);
   log_('createEvent', cal.getName() + ' | ' + b.title + ' ' + b.start, ev.getId(), cal.getId());
@@ -242,9 +258,17 @@ function applyReminders_(ev, mins) {
   list.map(Number).filter(m => !isNaN(m) && m >= 0 && m <= 40320).slice(0, 5)
       .forEach(m => ev.addPopupReminder(m));
 }
-function deleteEvent_(id, calendarId) {
+function deleteEvent_(id, calendarId, series) {
   const cals = calendarId ? [calById_(calendarId)] : visibleCalendars_();
-  for (const c of cals) { const ev = c.getEventById(id); if (ev) { const t = ev.getTitle(); ev.deleteEvent(); log_('deleteEvent', t, id, c.getId()); return { ok: true }; } }
+  for (const c of cals) {
+    // מזהה של סדרה מחזיר ב-getEventById את המופע הראשון בלבד, ומחיקה שם משאירה
+    // את כל השאר. ביטול של אירוע חוזר חייב לעבור דרך הסדרה עצמה.
+    if (series) {
+      try { const es = c.getEventSeriesById(id); if (es) { const t = es.getTitle(); es.deleteEventSeries(); log_('deleteEvent', t + ' (כל הסדרה)', id, c.getId()); return { ok: true }; } } catch (e) {}
+    }
+    const ev = c.getEventById(id);
+    if (ev) { const t = ev.getTitle(); ev.deleteEvent(); log_('deleteEvent', t, id, c.getId()); return { ok: true }; }
+  }
   throw new Error('האירוע לא נמצא');
 }
 
@@ -364,11 +388,12 @@ function chat_(b) {
     'כלל יסוד: אתה מציע, לא מבצע. כל פגישה, מטלה או מייל חוזרים כהצעה שמאושרת בלחיצה. מייל נשמר כטיוטה בלבד.',
     'פרטי או משותף: shared=true כשמדובר בילד, במשפחה, בבית, או כשנאמר במפורש "משותף", "לשנינו", "שבן או בת הזוג יראו". אחרת shared=false והפריט נשאר פרטי ביומן האישי. תמיד אפשר לשנות בכרטיס.',
     'תמונות והודעות מועברות: אם צורפה תמונה (צילום מסך של ווטסאפ, הזמנה, לוח חוגים, מכתב מבית הספר) או הודבק טקסט מועבר — חלץ ממנו את כל האירועים והמטלות, כל אחד כהצעה נפרדת עם תאריך ושעה מדויקים. אם השנה חסרה, הנח את המועד הקרוב הבא. ציין ב־why מאיפה נלקח כל פרט. אם משהו לא ברור בתמונה, שאל במקום לנחש.',
+    'אירוע חוזר: כשנאמר "כל שבוע", "כל יום", "כל חודש", "קבוע" או "חוזר", מלא repeat={"freq":"daily|weekly|monthly","until":"YYYY-MM-DD"}. את until ממלאים רק אם נאמר עד מתי במפורש; אחרת until="" ואל תמציא תאריך. באירוע שאינו חוזר repeat=null.',
     'כשיש התנגשות ביומן ציין זאת ב־why. הפרד בין חשוב לדחוף.',
     '',
     'החזר אך ורק אובייקט JSON תקין, בלי טקסט מסביב ובלי סימני קוד:',
     '{"reply":"טקסט קצר בעברית","proposals":[',
-    ' {"type":"event","title":"...","start":"ISO עם אזור זמן","end":"ISO","location":"","tags":["שם ילד"],"shared":false,"why":"..."},',
+    ' {"type":"event","title":"...","start":"ISO עם אזור זמן","end":"ISO","location":"","tags":["שם ילד"],"shared":false,"repeat":null,"why":"..."},',
     ' {"type":"task","title":"...","tags":[],"shared":false,"importance":"high|normal","due":"YYYY-MM-DD","mit":false,"why":"..."},',
     ' {"type":"email_draft","to":"","subject":"...","body":"...","why":"..."}',
     ']}',
