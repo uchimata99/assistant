@@ -28,6 +28,21 @@
       "purpose": "any"
     }
   ],
+  "shortcuts": [
+    {
+      "name": "הקלטה",
+      "short_name": "הקלטה",
+      "description": "פותח את השיחה ומדליק את המיקרופון",
+      "url": "./index.html?rec=1",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
   "share_target": {
     "action": "./share",
     "method": "POST",
