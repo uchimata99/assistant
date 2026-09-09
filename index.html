@@ -1135,8 +1135,13 @@ async function retrySync(){
 function openChat(){ $('chat').classList.add('open'); $('chat').setAttribute('aria-hidden','false'); scrollMsgs(); }
 // יציאה מהשיחה מכבה את המיקרופון תמיד. מיקרופון שממשיך לרוץ מאחורי מסך סגור
 // הוא הפתעה, ולא פיצ'ר. stop ולא abort, כדי שמה שכבר הוכתב יישאר בשורת ההודעה.
-function stopMic(){ disarmTap(); if(rec&&listening){ try{ rec.stop(); }catch(e){} } }
-function closeChat(){ stopMic(); $('chat').classList.remove('open'); $('chat').setAttribute('aria-hidden','true'); }
+// שורת הרמז יושבת בשורת ההודעה המקובעת, ולכן היא נראית גם במסך הבית.
+// בלי הניקוי הזה נשאר שם "מקשיב..." אחרי שהמיקרופון כבר כבוי.
+const chatOpen=()=>$('chat').classList.contains('open');
+function stopMic(){ disarmTap(); if(rec&&listening){ try{ rec.stop(); }catch(e){} } renderHint(); }
+// סוגרים קודם, ורק אז עוצרים. כך גם onend, שמגיע רגע אחר כך, כבר יודע
+// שהשיחה סגורה ומנקה את השורה במקום לכתוב בה "לשלוח?".
+function closeChat(){ $('chat').classList.remove('open'); $('chat').setAttribute('aria-hidden','true'); stopMic(); }
 function scrollMsgs(){ const m=$('msgs'); requestAnimationFrame(()=>m.scrollTop=m.scrollHeight); }
 function addMsg(text,who,imgs){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text; (imgs||[]).forEach(src=>{const im=document.createElement('img'); im.src=src; d.appendChild(im);}); $('msgs').appendChild(d); scrollMsgs(); return d; }
 
@@ -1388,8 +1393,10 @@ function setupSpeech(){
   rec=new SR(); rec.lang=S.cfg.voicelang; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1; let finalText='';
   rec.onstart=()=>{listening=true;disarmTap();$('mic').classList.add('on');$('hint').textContent=T().speak+' לעצירה — שוב על המיקרופון.';finalText='';};
   rec.onresult=ev=>{let interim='';for(const r of ev.results){if(r.isFinal)finalText+=r[0].transcript;else interim+=r[0].transcript;}$('input').value=(finalText+' '+interim).trim();autosize();$('send').disabled=!$('input').value.trim();};
-  rec.onerror=ev=>{$('hint').textContent=ev.error==='not-allowed'?'צריך לאשר גישה למיקרופון בדפדפן.':ev.error==='no-speech'?T().retry:'שגיאת דיבור: '+ev.error;};
-  rec.onend=()=>{listening=false;$('mic').classList.remove('on');if($('input').value.trim())$('hint').textContent='לשלוח? אפשר לתקן קודם.';};
+  rec.onerror=ev=>{ if(!chatOpen()){ renderHint(); return; } $('hint').textContent=ev.error==='not-allowed'?'צריך לאשר גישה למיקרופון בדפדפן.':ev.error==='no-speech'?T().retry:'שגיאת דיבור: '+ev.error;};
+  rec.onend=()=>{listening=false;$('mic').classList.remove('on');
+    if(!chatOpen()){ renderHint(); return; }
+    if($('input').value.trim())$('hint').textContent='לשלוח? אפשר לתקן קודם.';};
 }
 function toggleMic(){ if(!rec) return; if(listening){rec.stop();return;} rec.lang=S.cfg.voicelang; try{rec.start();}catch(e){} }
 // כניסה ישירה להקלטה, מקיצור בטלפון. פותחת את השיחה ומדליקה את המיקרופון.
