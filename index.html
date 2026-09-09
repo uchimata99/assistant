@@ -153,6 +153,9 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .month .dow{text-align:center;color:var(--ink-2);font-size:12px;padding-bottom:4px}
 .month .d{aspect-ratio:1;border-radius:var(--r-1);display:flex;flex-direction:column;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;background:var(--field)}
 .month .d.today{outline:2px solid var(--ink);font-weight:700}
+.month .d.sel{outline:2px solid var(--ink);background:var(--ink);color:var(--on-ink)}
+.month .d.sel .n{color:var(--on-ink)}
+.month button.d{border:0;font:inherit;cursor:pointer}
 .month .d.other{opacity:.35}
 .month .d .n{font-size:14px}
 .month .d .dots{display:flex;margin-top:4px;height:4px;width:62%;gap:2px}
@@ -865,10 +868,31 @@ function renderMonth(){
     const d=new Date(now.getFullYear(),now.getMonth(),n);
     const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e.tags));
     const cols=[...new Set(evs.map(e=>filterTag?tagOf(filterTag).color:accentOf(e).color))].slice(0,3);
-    html+=`<div class="d ${ymd(d)===ymd(now)?'today':''} ${evs.length?'hatday':''}" style="--load:${Math.min(4,evs.length)}"><span class="n">${n}</span><span class="dots">${cols.map(c=>`<i style="${hatVars(c)}"></i>`).join('')}</span></div>`;
+    const sel = monthSel===ymd(d) ? ' sel' : '';
+    html+=`<button class="d${sel} ${ymd(d)===ymd(now)?'today':''} ${evs.length?'hatday':''}" data-day="${ymd(d)}" aria-pressed="${!!sel}" style="--load:${Math.min(4,evs.length)}"><span class="n">${n}</span><span class="dots">${cols.map(c=>`<i style="${hatVars(c)}"></i>`).join('')}</span></button>`;
   }
-  $('month').innerHTML=html+'</div>';
+  html+='</div>';
+  // הרשת לבדה אינה מספיקה: בתא של 45 פיקסל אין מקום לכותרת אירוע.
+  // לכן לחיצה על יום פותחת את האירועים שלו מתחת, כמו ביומני נייד.
+  const dsel = monthSel ? new Date(monthSel+'T00:00:00') : now;
+  const list = S.events.filter(e=>ymd(new Date(e.start))===ymd(dsel)&&passFilter(e.tags))
+                       .sort((a,b)=>new Date(a.start)-new Date(b.start));
+  html += `<div class="dayhead ${ymd(dsel)===ymd(now)?'today':''}">${ymd(dsel)===ymd(now)?'היום':'יום '+HE_DAYS[dsel.getDay()]} · ${dsel.getDate()}.${dsel.getMonth()+1}</div>`;
+  html += list.length ? list.map(e=>{
+      const h=accentOf(e);
+      return `<div class="ev" style="${hatVars(h.color)}"><div class="time">${timeRange(new Date(e.start),new Date(e.end))}</div>`
+        +`<div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>`
+        +(e.location?`<div class="loc">${esc(e.location)}</div>`:'')+`</div></div>`;
+    }).join('')
+    : `<div class="empty"><b>אין אירועים ביום הזה</b>${demo()?'זה מצב הדגמה. חברו את השרת בהגדרות.':'אפשר לבחור יום אחר ברשת שלמעלה.'}</div>`;
+  $('month').innerHTML=html;
 }
+let monthSel=null;
+$('month').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-day]'); if(!b) return;
+  monthSel = monthSel===b.dataset.day ? null : b.dataset.day;
+  renderMonth();
+});
 const LOG_LABEL={createEvent:'נקבעה פגישה',deleteEvent:'בוטלה פגישה',addTask:'נוספה מטלה',createDraft:'נשמרה טיוטת מייל',createCalendar:'נוצר יומן',chat:'שיחה עם העוזר',digest:'תקציר ערב',setDigest:'שונו הגדרות התקציר'};
 function renderLog(){
   const box=$('log');
