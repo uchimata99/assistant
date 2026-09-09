@@ -40,7 +40,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 /* לא לבטל הכול: התקן מחריג שינויי שקיפות, ואפל ממליצה להחליף תזוזה בעמעום. */
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
-  .sheet,.chat,.prop,.toast{transition-property:opacity!important;transition-duration:var(--dur-2)!important;transform:none!important}
+  /* אסור לכפות כאן transform:none — הוא מבטל את translateY שמסתיר את המסכים,
+     והם נשארים נעולים על המסך. מבטלים רק את משך המעבר. */
+  .sheet,.chat,.prop,.toast{transition-duration:1ms!important}
   button:active,.task:active,.ev:active{transform:none}
 }
 
