@@ -418,9 +418,14 @@ details[open]>summary{border-bottom:1px solid var(--line)}
     <h2>הקלטה מהירה</h2>
     <div class="card">
       <div class="form">
+        <label for="openmode">כשהאפליקציה נפתחת</label>
+        <select id="openmode">
+          <option value="now">מסך היום</option>
+          <option value="rec">הקלטה מיד</option>
+        </select>
         <button class="btn ghost" id="reclink">העתק קישור שפותח הקלטה</button>
         <div class="status" id="recstat"></div>
-        <div class="note">שייכו את הקישור לקיצור בטלפון: באייפון — נגיעה כפולה בגב המכשיר או כפתור הפעולה, דרך אפליקציית "קיצורים". באנדרואיד — לחיצה ארוכה על אייקון האפליקציה, או שגרה של Assistant.</div>
+        <div class="note">לחיצה ארוכה על כפתור הכיבוי שמורה לעוזר של המערכת, ואפליקציית אינטרנט אינה יכולה לתפוס אותה. בסמסונג אפשר לשייך לחיצה כפולה על כפתור הצד לאפליקציה הזאת. אחרת: לחיצה ארוכה על האייקון, או קיצור עם הכתובת שלמעלה.</div>
       </div>
     </div>
 
@@ -508,7 +513,7 @@ const PROFILES = {
   f: { me:'', gender:'f' },
 };
 const DEFAULTS = {
-  profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL',
+  profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL', openMode:'now',
   remind:'30', digestChannel:'email', digestHour:21, partnerName:'',
   familyCalendarId:'',
   // התגים נוספים בהגדרות: שם, כינויים לזיהוי בדיבור ובהודעות, ויומן מהרשימה.
@@ -1080,7 +1085,7 @@ function readTagsFromForm(){
 }
 function renderSettings(){
   renderInstall();
-  $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang;
+  $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang; $('openmode').value=S.cfg.openMode||'now';
   $('secret').value=S.cfg.secret||''; $('remind').value=S.cfg.remind||''; $('pname').value=S.cfg.partnerName||'';
   $('digesth').innerHTML=Array.from({length:24},(_,h)=>`<option value="${h}" ${h===+S.cfg.digestHour?'selected':''}>${pad(h)}:00</option>`).join('');
   $('digestch').value=S.cfg.digestChannel||'email';
@@ -1518,7 +1523,7 @@ $('digesttest').addEventListener('click',async()=>{
 });
 
 $('save').addEventListener('click',()=>{
-  S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.familyCalendarId=$('famcal').value;
+  S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.openMode=$('openmode').value; S.cfg.familyCalendarId=$('famcal').value;
   S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.partnerName=$('pname').value.trim(); S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
   S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
   save('cfg',S.cfg); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
@@ -1612,8 +1617,12 @@ if(new URLSearchParams(location.search).has('digest')){
   showDigest();
 }
 // אותו כלל גם כאן: מסירים את הפרמטר, אחרת כל רענון פותח שוב הקלטה.
+// כפתור צד או אייקון פותחים את האפליקציה בלי פרמטר, ולכן יש גם הגדרה
+// שאומרת שכל פתיחה מתחילה בהקלטה. כך כל דרך פתיחה מגיעה לאותה התנהגות.
 if(new URLSearchParams(location.search).has('rec')){
   try{ const u=new URL(location.href); u.searchParams.delete('rec'); history.replaceState(null,'',u); }catch(e){}
+  startRecording();
+} else if(S.cfg.openMode==='rec' && S.cfg.profile){
   startRecording();
 }
 setInterval(()=>{renderHeader();renderNow();renderDayRail();},60000);
