@@ -36,7 +36,7 @@ function doPost(e) {
       return json_({ error: 'אין הרשאה. חסר סוד תואם בבקשה.' });
     }
     switch (b.action) {
-      case 'ping':           return json_({ ok: true, calendars: calendars_(), model: model_(), sharedSheet: !!PROPS.getProperty('SHARED_SHEET_ID'), secured: !!secret, digest: digestConfig_(), partner: !!PROPS.getProperty('PARTNER_EMAIL') });
+      case 'ping':           ensureShared_(); return json_({ ok: true, calendars: calendars_(), model: model_(), sharedSheet: !!PROPS.getProperty('SHARED_SHEET_ID'), secured: !!secret, digest: digestConfig_(), partner: !!PROPS.getProperty('PARTNER_EMAIL') });
       case 'agenda':         return json_(agenda_(b.days || 35));
       case 'calendars':      return json_({ calendars: calendars_() });
       case 'colors':         return json_(colors_());
@@ -78,6 +78,22 @@ function calById_(id) {
 // פלטת הצבעים של יומן גוגל. גוגל תומך רק בקבוצה סגורה של צבעים ומצמיד כל גוון אחר
 // לקרוב אליו, ולכן בורר צבע חופשי באפליקציה יוצר פער בין מה שנבחר למה שנראה ביומן.
 // נקרא ישירות מממשק היומן עם האסימון של הסקריפט, כדי שלא נחזיק עותק שעלול להתיישן.
+// שיתוף יומן אינו נתמך בשירות המובנה — c.addEditor אינו קיים על יומן, רק על גיליון.
+// היחיד שעובד הוא ממשק היומן עצמו, ולכן צריך שהוא יהיה מופעל בפרויקט הענן.
+function shareCal_(calendarId, email) {
+  const url = 'https://www.googleapis.com/calendar/v3/calendars/' +
+              encodeURIComponent(calendarId) + '/acl';
+  const r = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    payload: JSON.stringify({ role: 'writer', scope: { type: 'user', value: email } }),
+    muteHttpExceptions: true,
+  });
+  const code = r.getResponseCode();
+  if (code === 200 || code === 201) return true;
+  throw new Error('קוד ' + code + ': ' + r.getContentText().slice(0, 160));
+}
 function colors_() {
   const r = UrlFetchApp.fetch('https://www.googleapis.com/calendar/v3/colors', {
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
@@ -97,7 +113,7 @@ function createCalendar_(b) {
   let shared = '';
   const partner = PROPS.getProperty('PARTNER_EMAIL');
   if (partner) {
-    try { c.addEditor(partner); shared = partner; }
+    try { shareCal_(c.getId(), partner); shared = partner; }
     catch (err) { log_('createCalendar', 'היומן נוצר אך השיתוף נכשל: ' + err.message); }
   }
   log_('createCalendar', b.name + (shared ? ' · שותף עם ' + shared : ''));
@@ -110,18 +126,31 @@ function shareCalendar_(b) {
   if (!email) throw new Error('לא הוגדר PARTNER_EMAIL במאפייני הסקריפט');
   const c = CalendarApp.getCalendarById(b.id);
   if (!c) throw new Error('לא נמצא יומן כזה');
-  c.addEditor(String(email));
+  shareCal_(c.getId(), String(email));
   log_('shareCalendar', c.getName() + ' · ' + email);
   return { ok: true, email: String(email), name: c.getName() };
 }
-// משתף בבת אחת את כל היומנים שאינם היומן האישי הראשי.
+// מדיניות קבועה: כל היומנים משותפים בין בני הזוג, חוץ מהיומן האישי הראשי.
+// נאכף בכל חיבור, ולכן יומן שנוצר ידנית ביומן גוגל משותף גם הוא בלי לעשות דבר.
+function ensureShared_() {
+  const email = PROPS.getProperty('PARTNER_EMAIL');
+  if (!email) return 0;
+  let n = 0;
+  try {
+    CalendarApp.getAllOwnedCalendars().forEach(c => {
+      if (c.isMyPrimaryCalendar()) return;
+      try { shareCal_(c.getId(), email); n++; } catch (err) {}
+    });
+  } catch (err) {}
+  return n;
+}
 function shareAllCalendars_() {
   const email = PROPS.getProperty('PARTNER_EMAIL');
   if (!email) throw new Error('לא הוגדר PARTNER_EMAIL במאפייני הסקריפט');
   const done = [], failed = [];
   CalendarApp.getAllOwnedCalendars().forEach(c => {
     if (c.isMyPrimaryCalendar()) return;
-    try { c.addEditor(email); done.push(c.getName()); }
+    try { shareCal_(c.getId(), email); done.push(c.getName()); }
     catch (err) { failed.push(c.getName() + ': ' + err.message); }
   });
   log_('shareCalendar', 'שיתוף מרוכז עם ' + email + ' · ' + done.length + ' יומנים');
