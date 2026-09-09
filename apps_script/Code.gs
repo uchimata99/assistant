@@ -20,7 +20,8 @@
 
 const PROPS = PropertiesService.getScriptProperties();
 const TZ = Session.getScriptTimeZone();
-const TASK_HEADER = ['מזהה', 'כותרת', 'כובע', 'תגים', 'חשיבות', 'תאריך יעד', 'מהותית', 'בוצע', 'מי הוסיף', 'נוצר'];
+// עמודת "כובע" נשמרת ריקה: המושג בוטל, והעמודה נשארת כדי לא להזיז עמודות בגיליון קיים.
+const TASK_HEADER = ['מזהה', 'כותרת', '(לא בשימוש)', 'תגים', 'חשיבות', 'תאריך יעד', 'מהותית', 'בוצע', 'מי הוסיף', 'נוצר'];
 const LOG_HEADER = ['זמן', 'פעולה', 'פרטים', 'מזהה אירוע', 'מזהה יומן'];
 
 function doGet() { return json_({ ok: true, service: 'assistant', tz: TZ }); }
@@ -35,7 +36,7 @@ function doPost(e) {
       return json_({ error: 'אין הרשאה. חסר סוד תואם בבקשה.' });
     }
     switch (b.action) {
-      case 'ping':           return json_({ ok: true, calendars: calendars_(), model: model_(), sharedSheet: !!PROPS.getProperty('SHARED_SHEET_ID'), secured: !!secret, digest: digestConfig_() });
+      case 'ping':           return json_({ ok: true, calendars: calendars_(), model: model_(), sharedSheet: !!PROPS.getProperty('SHARED_SHEET_ID'), secured: !!secret, digest: digestConfig_(), partner: !!PROPS.getProperty('PARTNER_EMAIL') });
       case 'agenda':         return json_(agenda_(b.days || 35));
       case 'calendars':      return json_({ calendars: calendars_() });
       case 'colors':         return json_(colors_());
@@ -89,10 +90,12 @@ function colors_() {
 function createCalendar_(b) {
   if (!b.name) throw new Error('חסר שם ליומן');
   const c = CalendarApp.createCalendar(b.name, { color: b.color || undefined, timeZone: TZ, selected: true });
-  // הכתובת מגיעה מההגדרות במכשיר ולא מהקוד, כי המאגר ציבורי.
+  // כתובת בן/בת הזוג יושבת במאפייני הסקריפט ולא בקוד, כי המאגר ציבורי.
+  // מגדירים אותה פעם אחת בכל חשבון, כמו המפתח של אנתרופיק.
   let shared = '';
-  if (b.share) {
-    try { c.addEditor(String(b.share)); shared = String(b.share); }
+  const partner = PROPS.getProperty('PARTNER_EMAIL');
+  if (partner) {
+    try { c.addEditor(partner); shared = partner; }
     catch (err) { log_('createCalendar', 'היומן נוצר אך השיתוף נכשל: ' + err.message); }
   }
   log_('createCalendar', b.name + (shared ? ' · שותף עם ' + shared : ''));
@@ -255,8 +258,7 @@ function chat_(b) {
   const system = [
     'אתה עוזר אישי של ' + (ctx.me || 'המשתמש') + '. ' + (fem ? 'פנה אליה בלשון נקבה.' : 'פנה אליו בלשון זכר.') + ' ענה בעברית, קצר וישיר, בלי מילות ריצוד.',
     'זהו מכשיר של אחד משני בני זוג. לכל אחד עוזר משלו; מה שמסומן "משותף" נראה אצל שניהם.',
-    'הכובעים (הקשרים) של ' + (ctx.me || '') + ': ' + JSON.stringify(ctx.hats || []) + '. היום הוא יום ' + (ctx.dayHat || 'ללא כובע') + '.',
-    'תגים = הילדים: ' + JSON.stringify(ctx.tags || []) + '. כשמוזכר ילד בשם או בכינוי, מלא tags עם שמו; כשיש תג, הכובע הוא family והפריט משותף.',
+    'תגים = הילדים: ' + JSON.stringify(ctx.tags || []) + '. כשמוזכר ילד בשם או בכינוי, מלא tags עם שמו, והפריט משותף.',
     'הזמן עכשיו: ' + (ctx.now || new Date().toISOString()) + ' (אזור זמן ' + (ctx.tz || TZ) + '). תאריכים יחסיים ("מחר", "ביום שלישי") מחושבים מהזמן הזה.',
     'אירועים בימים הקרובים (כולל משותפים): ' + JSON.stringify(ctx.events || []),
     'מטלות פתוחות (עם מי הוסיף): ' + JSON.stringify(ctx.tasks || []),
@@ -265,13 +267,13 @@ function chat_(b) {
     'כלל יסוד: אתה מציע, לא מבצע. כל פגישה, מטלה או מייל חוזרים כהצעה שמאושרת בלחיצה. מייל נשמר כטיוטה בלבד.',
     'פרטי או משותף: shared=true כשמדובר בילד, במשפחה, בבית, או כשנאמר במפורש "משותף", "לשנינו", "שבן או בת הזוג יראו". אחרת shared=false והפריט נשאר פרטי ביומן האישי. תמיד אפשר לשנות בכרטיס.',
     'תמונות והודעות מועברות: אם צורפה תמונה (צילום מסך של ווטסאפ, הזמנה, לוח חוגים, מכתב מבית הספר) או הודבק טקסט מועבר — חלץ ממנו את כל האירועים והמטלות, כל אחד כהצעה נפרדת עם תאריך ושעה מדויקים. אם השנה חסרה, הנח את המועד הקרוב הבא. ציין ב־why מאיפה נלקח כל פרט. אם משהו לא ברור בתמונה, שאל במקום לנחש.',
-    'כשיש התנגשות ביומן, או שהבקשה חודרת ליום של כובע אחר, ציין זאת ב־why. הפרד בין חשוב לדחוף.',
+    'כשיש התנגשות ביומן ציין זאת ב־why. הפרד בין חשוב לדחוף.',
     '',
     'החזר אך ורק אובייקט JSON תקין, בלי טקסט מסביב ובלי סימני קוד:',
     '{"reply":"טקסט קצר בעברית","proposals":[',
-    ' {"type":"event","title":"...","start":"ISO עם אזור זמן","end":"ISO","location":"","hat":"מפתח כובע","tags":["שם ילד"],"shared":false,"why":"..."},',
-    ' {"type":"task","title":"...","hat":"...","tags":[],"shared":false,"importance":"high|normal","due":"YYYY-MM-DD","mit":false,"why":"..."},',
-    ' {"type":"email_draft","to":"","subject":"...","body":"...","hat":"...","why":"..."}',
+    ' {"type":"event","title":"...","start":"ISO עם אזור זמן","end":"ISO","location":"","tags":["שם ילד"],"shared":false,"why":"..."},',
+    ' {"type":"task","title":"...","tags":[],"shared":false,"importance":"high|normal","due":"YYYY-MM-DD","mit":false,"why":"..."},',
+    ' {"type":"email_draft","to":"","subject":"...","body":"...","why":"..."}',
     ']}',
     'אם אין פעולה להציע, proposals ריק.',
   ].join('\n');

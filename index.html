@@ -229,7 +229,7 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 .btn{display:inline-block;padding:11px 18px;border-radius:10px;background:var(--ink);color:var(--on-ink);font-weight:700;margin-top:14px}
 .btn.ghost{background:var(--paper);color:var(--ink)}
 .status{font-size:14px;color:var(--ink-2);margin-top:8px}
-.hatrow,.tagrow{display:grid;grid-template-columns:24px 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
+.tagrow{display:grid;grid-template-columns:24px 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
 .tagrow{padding-bottom:10px;border-bottom:1px dashed var(--line)}
 .tagrow .calrow{grid-column:1/-1;display:flex;gap:6px;align-items:center}
 .tagrow .calrow select{flex:1}
@@ -239,9 +239,6 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 .pal button[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 2px var(--card) inset}
 .mini{padding:8px 12px;border-radius:8px;background:var(--paper);font-weight:600;font-size:14px;white-space:nowrap}
 .mini.x{color:var(--ink-2);font-size:17px;padding:4px 10px}
-.daysel{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:6px}
-.daysel select{padding:8px 4px;font-size:var(--fs-3)}
-.daysel span{display:block;text-align:center;font-size:12px;color:var(--ink-2)}
 
 .toast{position:fixed;top:14px;inset-inline:14px;background:var(--ink);color:var(--on-ink);padding:12px 16px;border-radius:12px;z-index:60;text-align:center;opacity:0;transform:translateY(-8px);transition:.2s;pointer-events:none}
 .toast.show{opacity:1;transform:none}
@@ -262,8 +259,8 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 <div class="who" id="who" hidden>
   <h1>העוזר</h1>
   <p>איך לפנות אליך? הכול ניתן לשינוי אחר כך.</p>
-  <button data-p="m">פנייה בלשון זכר<small>אחר כך: שם, כובעים וילדים בהגדרות</small></button>
-  <button data-p="f">פנייה בלשון נקבה<small>אחר כך: שם, כובעים וילדים בהגדרות</small></button>
+  <button data-p="m">פנייה בלשון זכר<small>אחר כך: שם וילדים בהגדרות</small></button>
+  <button data-p="f">פנייה בלשון נקבה<small>אחר כך: שם וילדים בהגדרות</small></button>
 </div>
 
 <header>
@@ -326,10 +323,6 @@ details[open]>summary{border-bottom:1px solid var(--line)}
           <select id="gender"><option value="m">פנייה בלשון זכר</option><option value="f">פנייה בלשון נקבה</option></select>
         </div>
 
-        <label for="partner">כתובת הדואר של בן או בת הזוג</label>
-        <input id="partner" class="ltr" type="email" placeholder="name@example.com" autocomplete="off">
-        <div class="note">כל יומן חדש של ילד ישותף אוטומטית עם הכתובת הזאת, בהרשאת עריכה. הכתובת נשמרת במכשיר בלבד ואינה נכנסת לקוד.</div>
-
         <label for="famcal">יומן משפחתי משותף</label>
         <select id="famcal"></select>
         <div class="note">לכאן נכנסים אירועים "משותפים" שאינם של ילד מסוים. היומן הזה משותף בין שני החשבונות.</div>
@@ -339,11 +332,6 @@ details[open]>summary{border-bottom:1px solid var(--line)}
         <div id="tags"></div>
         <div class="note">תג מחובר ליומן משנה בגוגל: פגישות שלו נכנסות לשם, ואפשר לשתף את היומן בנפרד.</div>
 
-        <label>הכובעים</label>
-        <div id="hats"></div>
-
-        <label>לאיזה כובע שייך כל יום</label>
-        <div class="daysel" id="daysel"></div>
       </div>
     </div>
 
@@ -459,23 +447,14 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 
 <script>
 /* ===================== פרופילים וברירות מחדל ===================== */
-/* כובעים כלליים להתחלה. השמות, מילות המפתח וחלוקת הימים נערכים בהגדרות
-   ונשמרים במכשיר בלבד — הם לא יושבים בקוד ולא עולים לגיטהאב. */
-const HAT_PALETTE=['#1F4E79','#4A90A4','#1D6F42','#8E7CC3','#C0392B','#E8912D','#7A5C3E','#5B6570'];
-const STARTER_HATS = [
-  {key:'work',   name:'עבודה', color:'#1F4E79', kw:['עבודה','משרד','פגישה','לקוח','פרויקט']},
-  {key:'family', name:'משפחה', color:'#E8912D', kw:['משפחה','ילדים','בית','חוג','גן','בית ספר','רופא ילדים']},
-  {key:'self',   name:'אישי',  color:'#8E7CC3', kw:['ספורט','אימון','חברים','רופא']},
-];
-const STARTER_DAYS = ['work','work','work','work','work','family','family'];
 const PROFILES = {
-  m: { me:'', gender:'m', hats:STARTER_HATS, days:STARTER_DAYS },
-  f: { me:'', gender:'f', hats:STARTER_HATS, days:STARTER_DAYS },
+  m: { me:'', gender:'m' },
+  f: { me:'', gender:'f' },
 };
 const DEFAULTS = {
   profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL',
-  remind:'30', digestChannel:'notify', digestHour:21, partnerEmail:'',
-  hats:[], days:[], familyCalendarId:'',
+  remind:'30', digestChannel:'notify', digestHour:21,
+  familyCalendarId:'',
   // התגים נוספים בהגדרות: שם, כינויים לזיהוי בדיבור ובהודעות, ויומן מהרשימה.
   tags:[],
   calendars:[],
@@ -640,10 +619,15 @@ function safeOn(color, surfaceHex){
 }
 // שני הערכים נפלטים יחד, כי CSS לבדו לא יודע לחשב ניגודיות
 function hatVars(color){ return '--hat:'+safeOn(color,SURF_LIGHT)+';--hat-d:'+safeOn(color,SURF_DARK); }
-function hatOf(key){ return S.cfg.hats.find(h=>h.key===key) || {key:'other',name:'אחר',color:'#8A8F95'}; }
-function familyKey(){ return (S.cfg.hats.find(h=>h.key==='family')||S.cfg.hats[0]||{key:'other'}).key; }
-function guessHat(text){ const words=wordsOf(text); for(const h of S.cfg.hats) if((h.kw||[]).some(k=>k.includes(' ')?String(text||'').includes(k):nameInText(k,words))) return h.key; return 'other'; }
-function dayHat(d){ return S.cfg.days[d.getDay()]||'other'; }
+// הצבע והתווית של פריט נגזרים מהילד שהוא שייך אליו. אין יותר הקשרים ("כובעים"):
+// יום אחד מכיל אירועים של כולם, ולכן שיוך הקשר ליום לא תיאר את המציאות.
+function accentOf(x){
+  const k=((x&&x.tags)||[])[0];
+  const tg=k?tagOf(k):null;
+  if(tg) return {name:tg.name||'', color:tg.color||'#8A8F95'};
+  if(x&&x.shared) return {name:'משותף', color:'#5B6570'};
+  return {name:'', color:'#8A8F95'};
+}
 function tagOf(key){ return S.cfg.tags.find(t=>t.key===key); }
 function tagByName(n){ n=(n||'').trim(); return S.cfg.tags.find(t=>t.name===n||t.aliases.includes(n)); }
 // שם לא אמור להיתפס בתוך מילה אחרת — "רון" בתוך "רונית". מפרקים למילים ומתירים
@@ -723,15 +707,15 @@ function demoChat(msg,images){
   if(/פגישה|קבע|שיחה עם|ארוחה/.test(m)){
     const s=new Date(base); s.setHours(timeMatch?+timeMatch[1]:10,timeMatch&&timeMatch[2]?+timeMatch[2]:0); const e=new Date(s); e.setHours(e.getHours()+1);
     const title=m.replace(/^(תקבע|קבע|קבעי|תקבעי)\s*(לי)?\s*/,'').replace(/(מחר|היום|ב-?\d{1,2}(:\d{2})?|ביום \S+)/g,'').trim()||'פגישה';
-    props.push({type:'event',title,start:s.toISOString(),end:e.toISOString(),location:'',hat:shared?familyKey():guessHat(m),tags,shared,why:'זיהיתי בקשה לקביעת פגישה. משך ברירת מחדל שעה.'});
+    props.push({type:'event',title,start:s.toISOString(),end:e.toISOString(),location:'',tags,shared,why:'זיהיתי בקשה לקביעת פגישה. משך ברירת מחדל שעה.'});
   } else if(/מטלה|תזכיר|תזכור|צריך ל|צריכה ל|לקנות/.test(m)){
-    props.push({type:'task',title:m.replace(/^(תזכיר לי|מטלה:?|תוסיף|תזכור)\s*/,'').trim(),hat:shared?familyKey():guessHat(m),tags,shared,importance:/חשוב/.test(m)?'high':'normal',due:ymd(base),why:'זיהיתי מטלה.'});
+    props.push({type:'task',title:m.replace(/^(תזכיר לי|מטלה:?|תוסיף|תזכור)\s*/,'').trim(),tags,shared,importance:/חשוב/.test(m)?'high':'normal',due:ymd(base),why:'זיהיתי מטלה.'});
   } else if(/מייל|כתוב ל|נסח/.test(m)){
-    props.push({type:'email_draft',to:'',subject:'בהמשך לשיחתנו',body:'שלום,\n\n'+m+'\n\nבברכה,\n'+S.cfg.me,hat:guessHat(m),tags:[],why:'טיוטה בלבד — תישמר בטיוטות ולא תישלח.'});
+    props.push({type:'email_draft',to:'',subject:'בהמשך לשיחתנו',body:'שלום,\n\n'+m+'\n\nבברכה,\n'+S.cfg.me,tags:[],why:'טיוטה בלבד — תישמר בטיוטות ולא תישלח.'});
   }
   const reply=props.length?'הנה מה שהבנתי. אפשר לשנות בין פרטי למשותף לפני האישור.':
     (/נשאר/.test(m)?'להיום נשארו '+S.tasks.filter(t=>!t.done&&t.due===ymd(new Date())).length+' מטלות.':
-     /סיום יום/.test(m)?'סיום יום: מה סיימת, ואיפה עצרת בכל כובע? ואז נבחר את המטלות של מחר.':
+     /סיום יום/.test(m)?'סיום יום: מה סיימת, ואיפה עצרת? ואז נבחר את המטלות של מחר.':
      'במצב הדגמה אני מזהה פגישה, מטלה או טיוטת מייל. עם השרת אני עונה על כל שאלה עם ההקשר מהיומן, מהמטלות וממה ששותף.');
   return {reply,proposals:props};
 }
@@ -753,25 +737,23 @@ function fmtDur(m){
   const hs = h===1 ? "שעה" : h===2 ? "שעתיים" : h+" שעות";
   return r ? hs+" ו-"+r+" דקות" : hs;
 }
-function evHat(e){ return e.hat || ((e.tags&&e.tags.length)||e.shared ? familyKey() : guessHat(e.title+' '+e.location)); }
 function renderNow(){
   const now=new Date();
   const todays=S.events.filter(e=>ymd(new Date(e.start))===ymd(now)).sort((a,b)=>new Date(a.start)-new Date(b.start));
   const cur=todays.find(e=>new Date(e.start)<=now&&new Date(e.end)>now); const next=todays.find(e=>new Date(e.start)>now);
-  const dh=hatOf(dayHat(now)); let html='';
+  let html='';
   if(cur){
-    const h=hatOf(evHat(cur)); const left=Math.round((new Date(cur.end)-now)/60000);
-    const intrude=dh.key!=='other'&&h.key!=='other'&&h.key!==dh.key;
-    html=`<div class="hat"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}${intrude?' · חדירה ליום '+esc(dh.name):''}</div>
+    const h=accentOf(cur); const left=Math.round((new Date(cur.end)-now)/60000);
+    html=`<div class="hat">${h.name?`<span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}`:'עכשיו'}</div>
       <div class="title"><span dir="auto">${esc(cur.title)}</span>${tagChips(cur.tags)}</div>
       <div class="meta">עד ${hhmm(new Date(cur.end))} · נשארו ${fmtDur(left)}${cur.location?' · '+esc(cur.location):''}</div>
       <div class="prog"><i style="width:${Math.max(0,Math.min(100,Math.round((now-new Date(cur.start))/(new Date(cur.end)-new Date(cur.start))*100)))}%"></i></div>`;
     $('now').setAttribute('style',hatVars(h.color));
   } else {
-    html=`<div class="hat"><span class="dot" style="${hatVars(dh.color)}"></span>יום ${esc(dh.name)}</div>
+    html=`<div class="hat">היום</div>
       <div class="title">${next?'זמן פנוי עד '+hhmm(new Date(next.start)):(todays.length?'היום הסתיים ביומן':'אין אירועים ביומן היום')}</div>
       <div class="meta">${next?'חלון ריכוז של '+fmtDur(Math.round((new Date(next.start)-now)/60000))+'. מה המטלה הכי חשובה?':'זמן טוב לסגור לולאות פתוחות.'}</div>`;
-    $('now').setAttribute('style',hatVars(dh.color));
+    $('now').setAttribute('style',hatVars('#8A8F95'));
   }
   if(next) html+=`<div class="next">הבא: <b>${hhmm(new Date(next.start))}</b> ${esc(next.title)}${tagChips(next.tags)}</div>`;
   $('now').innerHTML=html;
@@ -795,23 +777,23 @@ function renderDayRail(){
     const s=new Date(e.start), en=new Date(e.end);
     const gap=Math.round((s-cursor)/60000);
     if(gap>=20) html+='<div class="gap"><span class="gtime">'+timeRange(cursor,s)+'</span><span>פנוי · '+fmtDur(gap)+'</span></div>';
-    const h=hatOf(evHat(e)), dur=Math.max(1,Math.round((en-s)/60000));
+    const h=accentOf(e), dur=Math.max(1,Math.round((en-s)/60000));
     const w=Math.max(6,Math.min(100,Math.round(dur/longest*100)));
     html+='<div class="ev" style="'+hatVars(h.color)+'">'
       +'<div class="time">'+timeRange(s,en)+'</div>'
       +'<div><div class="title" dir="auto">'+esc(e.title)+'</div>'
-      +'<div class="loc">'+esc(h.name)+(e.location?" · "+esc(e.location):"")+tagChips(e.tags)+'</div>'
+      +'<div class="loc">'+(e.location?esc(e.location):'')+tagChips(e.tags)+'</div>'
       +'<div class="bar" aria-hidden="true"><i style="width:'+w+'%"></i></div></div></div>';
     if(en>cursor) cursor=en;
   });
   box.innerHTML=html;
 }
 function taskRow(t){
-  const h=hatOf(t.hat);
+  const h=accentOf(t);
   return `<div class="task ${t.done?'done':''}" data-id="${t.id}">
     <button class="chk" aria-label="סמן כבוצע" data-act="toggle"></button>
     <div class="body"><div class="t" dir="auto">${esc(t.title)}</div>
-      <div class="s"><span><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}</span>${tagChips(t.tags)}${sharedChip(t)}${t.importance==='high'?'<span>חשוב</span>':''}${t.due&&t.due!==ymd(new Date())?'<span>עד '+esc(t.due)+'</span>':''}</div></div>
+      <div class="s">${tagChips(t.tags)}${sharedChip(t)}${t.importance==='high'?'<span>חשוב</span>':''}${t.due&&t.due!==ymd(new Date())?'<span>עד '+esc(t.due)+'</span>':''}</div></div>
     <button class="x" aria-label="מחק" data-act="del">×</button></div>`;
 }
 function renderTasks(){
@@ -830,10 +812,10 @@ function renderFilter(){
 function renderWeek(){
   const start=new Date(); start.setHours(0,0,0,0); let html='';
   for(let i=0;i<7;i++){
-    const d=new Date(start); d.setDate(d.getDate()+i); const dh=hatOf(dayHat(d));
+    const d=new Date(start); d.setDate(d.getDate()+i);
     const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e.tags)).sort((a,b)=>new Date(a.start)-new Date(b.start));
-    html+=`<div class="dayhead ${i===0?'today':''}"><span class="dot" style="${hatVars(dh.color)}"></span>${i===0?'היום':'יום '+HE_DAYS[d.getDay()]} · ${d.getDate()}.${d.getMonth()+1}${dh.key!=='other'?' · '+esc(dh.name):''}</div>`;
-    html+=evs.length?evs.map(e=>{const h=hatOf(evHat(e));return `<div class="ev" style="${hatVars(h.color)}"><div class="time">${hhmm(new Date(e.start))}<br>${hhmm(new Date(e.end))}</div><div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>${e.location?`<div class="loc">${esc(e.location)}</div>`:''}</div></div>`;}).join('')
+    html+=`<div class="dayhead ${i===0?'today':''}">${i===0?'היום':'יום '+HE_DAYS[d.getDay()]} · ${d.getDate()}.${d.getMonth()+1}</div>`;
+    html+=evs.length?evs.map(e=>{const h=accentOf(e);return `<div class="ev" style="${hatVars(h.color)}"><div class="time">${hhmm(new Date(e.start))}<br>${hhmm(new Date(e.end))}</div><div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>${e.location?`<div class="loc">${esc(e.location)}</div>`:''}</div></div>`;}).join('')
       :`<div class="ev" style="--hat:transparent"><div class="time"></div><div class="loc">פנוי</div></div>`;
   }
   $('week').innerHTML=html;
@@ -844,10 +826,10 @@ function renderMonth(){
   HE_DAYS_SHORT.forEach(d=>html+=`<div class="dow">${d}</div>`);
   for(let i=0;i<startOff;i++) html+=`<div class="d other"></div>`;
   for(let n=1;n<=days;n++){
-    const d=new Date(now.getFullYear(),now.getMonth(),n); const dh=hatOf(dayHat(d));
+    const d=new Date(now.getFullYear(),now.getMonth(),n);
     const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e.tags));
-    const cols=[...new Set(evs.map(e=>filterTag?tagOf(filterTag).color:hatOf(evHat(e)).color))].slice(0,3);
-    html+=`<div class="d ${ymd(d)===ymd(now)?'today':''} ${dh.key!=='other'?'hatday':''}" style="${hatVars(dh.color)};--load:${Math.min(4,evs.length)}"><span class="n">${n}</span><span class="dots">${cols.map(c=>`<i style="${hatVars(c)}"></i>`).join('')}</span></div>`;
+    const cols=[...new Set(evs.map(e=>filterTag?tagOf(filterTag).color:accentOf(e).color))].slice(0,3);
+    html+=`<div class="d ${ymd(d)===ymd(now)?'today':''} ${evs.length?'hatday':''}" style="--load:${Math.min(4,evs.length)}"><span class="n">${n}</span><span class="dots">${cols.map(c=>`<i style="${hatVars(c)}"></i>`).join('')}</span></div>`;
   }
   $('month').innerHTML=html+'</div>';
 }
@@ -901,13 +883,10 @@ function renderSettings(){
   renderInstall();
   $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang;
   $('secret').value=S.cfg.secret||''; $('remind').value=S.cfg.remind||'';
-  $('partner').value=S.cfg.partnerEmail||'';
   $('digesth').innerHTML=Array.from({length:24},(_,h)=>`<option value="${h}" ${h===+S.cfg.digestHour?'selected':''}>${pad(h)}:00</option>`).join('');
   $('digestch').value=S.cfg.digestChannel||'off';
   $('conn').open=!S.cfg.url;
   renderTags();
-  $('hats').innerHTML=S.cfg.hats.map((h,i)=>`<div class="hatrow" data-i="${i}" data-color="${h.color}"><button type="button" class="sw" data-act="pick" style="background:${h.color}" aria-label="צבע"></button><input type="text" value="${esc(h.name)}" data-f="name" aria-label="שם"><input type="text" value="${esc(h.kw.join(', '))}" data-f="kw" placeholder="מילות מפתח" aria-label="מילות מפתח"><div class="pal" hidden>${HAT_PALETTE.map(c=>`<button type="button" class="psw" data-c="${c}" aria-pressed="${c.toLowerCase()===String(h.color).toLowerCase()}" style="background:${c}" aria-label="צבע ${c}"></button>`).join('')}</div></div>`).join('');
-  $('daysel').innerHTML=S.cfg.days.map((k,i)=>`<div><span>${HE_DAYS_SHORT[i]}</span><select data-d="${i}">${[...S.cfg.hats,{key:'other',name:'—'}].map(h=>`<option value="${h.key}" ${h.key===k?'selected':''}>${esc(h.name)}</option>`).join('')}</select></div>`).join('');
 }
 function renderAll(){ renderHeader(); renderNow(); renderDayRail(); renderTasks(); renderWeek(); renderMonth(); renderLog(); }
 
@@ -919,7 +898,7 @@ async function loadAgenda(){
     S.events=(r.events||[]).map(e=>{
       const tags=guessTags((e.title||'')+' '+(e.location||''),e.calendarId,e.calendarName);
       const shared=!!(tags.length||(S.cfg.familyCalendarId&&e.calendarId===S.cfg.familyCalendarId)||e.shared);
-      return {...e,tags,shared,hat:e.hat||(shared?familyKey():guessHat((e.title||'')+' '+(e.location||'')))};
+      return {...e,tags,shared};
     });
     renderNow(); renderDayRail(); renderWeek(); renderMonth();
   }catch(err){ toast('לא הצלחתי לקרוא את היומן: '+err.message); }
@@ -971,9 +950,8 @@ function addProposal(p){
   p.tags=normTags(p.tags); if(!p.tags.length) p.tags=guessTags((p.title||'')+' '+(p.body||''));
   if(p.shared==null) p.shared=p.tags.length>0;
   if(p.type==='email_draft') p.shared=false;
-  if((p.tags.length||p.shared)&&(!p.hat||p.hat==='other')) p.hat=familyKey();
   S.pending[id]=p;
-  const h=hatOf(p.hat||guessHat((p.title||'')+' '+(p.body||''))); const d=describe(p);
+  const h=accentOf(p); const d=describe(p);
   const el=document.createElement('div'); el.className='prop'; el.style.setProperty('--hat',h.color); el.dataset.id=id;
   const canShare=p.type!=='email_draft';
   el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)} · ${esc(d.kind)}</div>
@@ -997,7 +975,7 @@ async function approve(id,el){
       addLog('נקבע ב'+dest.name+': '+title+' ('+describe(p).meta+')',{by:'באישורך',undoable:true,eventId:r.id,calendarId:dest.id});
       await loadAgenda();
     } else if(p.type==='task'){
-      const t={id:'t'+Date.now(),title:p.title,hat:p.hat||guessHat(p.title),tags:p.tags||[],shared:!!p.shared,author:S.cfg.me,importance:p.importance||'normal',due:p.due||ymd(new Date()),mit:!!p.mit,done:'',synced:demo()};
+      const t={id:'t'+Date.now(),title:p.title,tags:p.tags||[],shared:!!p.shared,author:S.cfg.me,importance:p.importance||'normal',due:p.due||ymd(new Date()),mit:!!p.mit,done:'',synced:demo()};
       let dropped=false;
       if(t.mit&&S.tasks.filter(x=>x.mit&&!x.done).length>=S.cfg.mitmax){ t.mit=false; dropped=true; }
       S.tasks.push(t); save('tasks',S.tasks); renderTasks();
@@ -1025,10 +1003,10 @@ async function send(text){
     const now=new Date();
     const ctx={
       me:S.cfg.me, gender:S.cfg.gender, now:now.toISOString(), tz:Intl.DateTimeFormat().resolvedOptions().timeZone,
-      dayHat:hatOf(dayHat(now)).name, hats:S.cfg.hats.map(h=>({key:h.key,name:h.name})),
+
       tags:S.cfg.tags.map(t=>({name:t.name,aliases:t.aliases,hasCalendar:!!t.calendarId})),
       hasFamilyCalendar:!!S.cfg.familyCalendarId, mitmax:S.cfg.mitmax,
-      tasks:S.tasks.filter(t=>!t.done).map(t=>({title:t.title,hat:hatOf(t.hat).name,tags:(t.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!t.shared,author:t.author,importance:t.importance,due:t.due,mit:!!t.mit})),
+      tasks:S.tasks.filter(t=>!t.done).map(t=>({title:t.title,tags:(t.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!t.shared,author:t.author,importance:t.importance,due:t.due,mit:!!t.mit})),
       events:S.events.filter(e=>{const d=new Date(e.start);return d>new Date(now.getTime()-2*3600e3)&&d<new Date(now.getTime()+8*86400e3);}).map(e=>({title:e.title,start:e.start,end:e.end,location:e.location,tags:(e.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!e.shared})),
     };
     const r=await api('chat',{message:text,images:imgs.map(i=>i.data),history:S.history.slice(-10),context:ctx});
@@ -1061,7 +1039,7 @@ function demoDigest(){
   L.push('','מטלות מהותיות שנבחרו:');
   if(!mits.length) L.push('  עוד לא נבחרו. זה הרגע לבחור עד '+S.cfg.mitmax+'.');
   mits.forEach(x=>L.push('  · '+x.title+(x.shared?' (משותף)':'')));
-  L.push('','לפני שסוגרים את היום: מה נסגר, ואיפה עצרת בכל כובע?');
+  L.push('','לפני שסוגרים את היום: מה נסגר, ואיפה עצרת?');
   return L.join('\n');
 }
 $('showdigest').addEventListener('click',showDigest);
@@ -1197,22 +1175,9 @@ $('digesttest').addEventListener('click',async()=>{
 
 $('save').addEventListener('click',()=>{
   S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.familyCalendarId=$('famcal').value;
-  S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.partnerEmail=$('partner').value.trim(); S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
-  document.querySelectorAll('#hats .hatrow').forEach((row,i)=>{const h=S.cfg.hats[i];h.color=row.dataset.color||h.color;h.name=row.querySelector('[data-f=name]').value.trim()||h.name;h.kw=row.querySelector('[data-f=kw]').value.split(',').map(s=>s.trim()).filter(Boolean);});
-  document.querySelectorAll('#daysel select').forEach(s=>S.cfg.days[+s.dataset.d]=s.value);
+  S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
   S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
   save('cfg',S.cfg); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
-});
-$('hats').addEventListener('click',e=>{
-  const b=e.target.closest('button'); if(!b) return;
-  const r=b.closest('.hatrow'); if(!r) return;
-  if(b.dataset.act==='pick'){ const pl=r.querySelector('.pal'); if(pl) pl.hidden=!pl.hidden; return; }
-  if(b.classList.contains('psw')){
-    r.dataset.color=b.dataset.c;
-    r.querySelector('.sw').style.background=b.dataset.c;
-    r.querySelectorAll('.psw').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));
-    r.querySelector('.pal').hidden=true;
-  }
 });
 $('tags').addEventListener('click',async e=>{
   const b=e.target.closest('button'); if(!b) return;
@@ -1232,11 +1197,10 @@ $('tags').addEventListener('click',async e=>{
   if(b.dataset.act==='mkcal'){
     S.cfg.tags=readTagsFromForm(); const t=S.cfg.tags[i]; if(!t.name){toast('קודם שם, אחר כך יומן.');return;} b.textContent='יוצר...';
     try{
-      const share=(S.cfg.partnerEmail||'').trim();
-      const r=await api('createCalendar',{name:t.name,color:t.color,share:share});
+      const r=await api('createCalendar',{name:t.name,color:t.color});
       t.calendarId=r.id;(S.cfg.calendars=S.cfg.calendars||[]).push({id:r.id,name:t.name});
       save('cfg',S.cfg);renderTags();
-      const withWho = r.shared ? ' ושותף עם '+r.shared : (share?' — השיתוף נכשל, אפשר לשתף ידנית מיומן גוגל':' (בלי שיתוף: לא הוגדרה כתובת בן/בת הזוג)');
+      const withWho = r.shared ? ' ושותף עם '+r.shared : ' — בלי שיתוף: לא הוגדר PARTNER_EMAIL בשרת';
       addLog('נוצר יומן משנה בגוגל: '+t.name+withWho);
       toast('נוצר יומן: '+t.name+(r.shared?' · שותף':''));
     }
@@ -1245,7 +1209,7 @@ $('tags').addEventListener('click',async e=>{
 });
 $('mkfam').addEventListener('click',async e=>{
   e.target.textContent='יוצר...';
-  try{const r=await api('createCalendar',{name:'משפחה',color:(S.cfg.palette||[]).includes('#ff7537')?'#ff7537':'#C97B2A',share:(S.cfg.partnerEmail||'').trim()});S.cfg.familyCalendarId=r.id;(S.cfg.calendars=S.cfg.calendars||[]).push({id:r.id,name:'משפחה'});save('cfg',S.cfg);renderTags();addLog('נוצר יומן משפחתי בגוגל');toast('נוצר יומן משפחה. עכשיו לשתף אותו מיומן גוגל עם החשבון השני.');}
+  try{const r=await api('createCalendar',{name:'משפחה',color:(S.cfg.palette||[]).includes('#ff7537')?'#ff7537':'#C97B2A'});S.cfg.familyCalendarId=r.id;(S.cfg.calendars=S.cfg.calendars||[]).push({id:r.id,name:'משפחה'});save('cfg',S.cfg);renderTags();addLog('נוצר יומן משפחתי בגוגל');toast('נוצר יומן משפחה. עכשיו לשתף אותו מיומן גוגל עם החשבון השני.');}
   catch(err){toast('לא נוצר: '+err.message);}
   e.target.textContent='צור יומן משפחה';
 });
@@ -1288,13 +1252,13 @@ $('digestsave').addEventListener('click',async()=>{
 /* ===================== מסך ראשון ===================== */
 function applyProfile(key){
   const p=PROFILES[key]; if(!p) return;
-  S.cfg.profile=key; S.cfg.me=p.me; S.cfg.gender=p.gender; S.cfg.hats=JSON.parse(JSON.stringify(p.hats)); S.cfg.days=p.days.slice(); save('cfg',S.cfg);
+  S.cfg.profile=key; S.cfg.me=p.me; S.cfg.gender=p.gender; save('cfg',S.cfg);
 }
 function openSettings(){ const b=document.querySelector('[role=tab][data-tab="settings"]'); if(b) b.click(); }
-$('who').addEventListener('click',e=>{const b=e.target.closest('button[data-p]');if(!b)return;applyProfile(b.dataset.p);$('who').hidden=true;renderAll();openSettings();toast('נתחיל בהגדרות: השם שלך, הכובעים, והילדים.');});
+$('who').addEventListener('click',e=>{const b=e.target.closest('button[data-p]');if(!b)return;applyProfile(b.dataset.p);$('who').hidden=true;renderAll();openSettings();toast('נתחיל בהגדרות: השם שלך והילדים.');});
 
 /* ===================== התחלה ===================== */
-if(!S.cfg.profile||!S.cfg.hats.length) $('who').hidden=false;
+if(!S.cfg.profile) $('who').hidden=false;
 renderAll(); setupSpeech(); loadAgenda(); loadTasks(); pickupShared();
 // הקישור בתיאור אירוע ההתראה נכנס ישר למסך הלוז
 // הקישור מאירוע ההתראה מגיע עם digest בכתובת. מסירים אותו מיד אחרי הפתיחה,
