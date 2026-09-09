@@ -39,6 +39,8 @@ function doPost(e) {
       case 'agenda':         return json_(agenda_(b.days || 35));
       case 'calendars':      return json_({ calendars: calendars_() });
       case 'colors':         return json_(colors_());
+      case 'shareCalendar':  return json_(shareCalendar_(b));
+      case 'deleteCalendar': return json_(deleteCalendar_(b));
       case 'createCalendar': return json_(createCalendar_(b));
       case 'createEvent':    return json_(createEvent_(b));
       case 'deleteEvent':    return json_(deleteEvent_(b.id, b.calendarId));
@@ -87,8 +89,31 @@ function colors_() {
 function createCalendar_(b) {
   if (!b.name) throw new Error('חסר שם ליומן');
   const c = CalendarApp.createCalendar(b.name, { color: b.color || undefined, timeZone: TZ, selected: true });
-  log_('createCalendar', b.name);
-  return { ok: true, id: c.getId(), name: c.getName() };
+  // הכתובת מגיעה מההגדרות במכשיר ולא מהקוד, כי המאגר ציבורי.
+  let shared = '';
+  if (b.share) {
+    try { c.addEditor(String(b.share)); shared = String(b.share); }
+    catch (err) { log_('createCalendar', 'היומן נוצר אך השיתוף נכשל: ' + err.message); }
+  }
+  log_('createCalendar', b.name + (shared ? ' · שותף עם ' + shared : ''));
+  return { ok: true, id: c.getId(), name: c.getName(), shared: shared };
+}
+function shareCalendar_(b) {
+  if (!b.id || !b.email) throw new Error('חסר יומן או כתובת');
+  const c = CalendarApp.getCalendarById(b.id);
+  if (!c) throw new Error('לא נמצא יומן כזה');
+  c.addEditor(String(b.email));
+  log_('shareCalendar', c.getName() + ' · ' + b.email);
+  return { ok: true };
+}
+function deleteCalendar_(b) {
+  if (!b.id) throw new Error('חסר מזהה יומן');
+  const c = CalendarApp.getCalendarById(b.id);
+  if (!c) throw new Error('לא נמצא יומן כזה');
+  const name = c.getName();
+  c.deleteCalendar();
+  log_('deleteCalendar', name);
+  return { ok: true };
 }
 function agenda_(days) {
   const start = new Date(); start.setHours(0, 0, 0, 0);

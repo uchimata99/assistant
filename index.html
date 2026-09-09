@@ -326,6 +326,10 @@ details[open]>summary{border-bottom:1px solid var(--line)}
           <select id="gender"><option value="m">פנייה בלשון זכר</option><option value="f">פנייה בלשון נקבה</option></select>
         </div>
 
+        <label for="partner">כתובת הדואר של בן או בת הזוג</label>
+        <input id="partner" class="ltr" type="email" placeholder="name@example.com" autocomplete="off">
+        <div class="note">כל יומן חדש של ילד ישותף אוטומטית עם הכתובת הזאת, בהרשאת עריכה. הכתובת נשמרת במכשיר בלבד ואינה נכנסת לקוד.</div>
+
         <label for="famcal">יומן משפחתי משותף</label>
         <select id="famcal"></select>
         <div class="note">לכאן נכנסים אירועים "משותפים" שאינם של ילד מסוים. היומן הזה משותף בין שני החשבונות.</div>
@@ -470,7 +474,7 @@ const PROFILES = {
 };
 const DEFAULTS = {
   profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL',
-  remind:'30', digestChannel:'notify', digestHour:21,
+  remind:'30', digestChannel:'notify', digestHour:21, partnerEmail:'',
   hats:[], days:[], familyCalendarId:'',
   // התגים נוספים בהגדרות: שם, כינויים לזיהוי בדיבור ובהודעות, ויומן מהרשימה.
   tags:[],
@@ -897,6 +901,7 @@ function renderSettings(){
   renderInstall();
   $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang;
   $('secret').value=S.cfg.secret||''; $('remind').value=S.cfg.remind||'';
+  $('partner').value=S.cfg.partnerEmail||'';
   $('digesth').innerHTML=Array.from({length:24},(_,h)=>`<option value="${h}" ${h===+S.cfg.digestHour?'selected':''}>${pad(h)}:00</option>`).join('');
   $('digestch').value=S.cfg.digestChannel||'off';
   $('conn').open=!S.cfg.url;
@@ -1192,7 +1197,7 @@ $('digesttest').addEventListener('click',async()=>{
 
 $('save').addEventListener('click',()=>{
   S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.familyCalendarId=$('famcal').value;
-  S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
+  S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.partnerEmail=$('partner').value.trim(); S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
   document.querySelectorAll('#hats .hatrow').forEach((row,i)=>{const h=S.cfg.hats[i];h.color=row.dataset.color||h.color;h.name=row.querySelector('[data-f=name]').value.trim()||h.name;h.kw=row.querySelector('[data-f=kw]').value.split(',').map(s=>s.trim()).filter(Boolean);});
   document.querySelectorAll('#daysel select').forEach(s=>S.cfg.days[+s.dataset.d]=s.value);
   S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
@@ -1226,13 +1231,21 @@ $('tags').addEventListener('click',async e=>{
   if(b.dataset.act==='deltag'){S.cfg.tags=readTagsFromForm();const [t]=S.cfg.tags.splice(i,1);save('cfg',S.cfg);renderTags();renderTasks();toast('התג של '+(t.name||'')+' הוסר');return;}
   if(b.dataset.act==='mkcal'){
     S.cfg.tags=readTagsFromForm(); const t=S.cfg.tags[i]; if(!t.name){toast('קודם שם, אחר כך יומן.');return;} b.textContent='יוצר...';
-    try{const r=await api('createCalendar',{name:t.name,color:t.color});t.calendarId=r.id;(S.cfg.calendars=S.cfg.calendars||[]).push({id:r.id,name:t.name});save('cfg',S.cfg);renderTags();addLog('נוצר יומן משנה בגוגל: '+t.name);toast('נוצר יומן: '+t.name);}
+    try{
+      const share=(S.cfg.partnerEmail||'').trim();
+      const r=await api('createCalendar',{name:t.name,color:t.color,share:share});
+      t.calendarId=r.id;(S.cfg.calendars=S.cfg.calendars||[]).push({id:r.id,name:t.name});
+      save('cfg',S.cfg);renderTags();
+      const withWho = r.shared ? ' ושותף עם '+r.shared : (share?' — השיתוף נכשל, אפשר לשתף ידנית מיומן גוגל':' (בלי שיתוף: לא הוגדרה כתובת בן/בת הזוג)');
+      addLog('נוצר יומן משנה בגוגל: '+t.name+withWho);
+      toast('נוצר יומן: '+t.name+(r.shared?' · שותף':''));
+    }
     catch(err){b.textContent='צור יומן';toast('לא נוצר: '+err.message);}
   }
 });
 $('mkfam').addEventListener('click',async e=>{
   e.target.textContent='יוצר...';
-  try{const r=await api('createCalendar',{name:'משפחה',color:(S.cfg.palette||[]).includes('#ff7537')?'#ff7537':'#C97B2A'});S.cfg.familyCalendarId=r.id;(S.cfg.calendars=S.cfg.calendars||[]).push({id:r.id,name:'משפחה'});save('cfg',S.cfg);renderTags();addLog('נוצר יומן משפחתי בגוגל');toast('נוצר יומן משפחה. עכשיו לשתף אותו מיומן גוגל עם החשבון השני.');}
+  try{const r=await api('createCalendar',{name:'משפחה',color:(S.cfg.palette||[]).includes('#ff7537')?'#ff7537':'#C97B2A',share:(S.cfg.partnerEmail||'').trim()});S.cfg.familyCalendarId=r.id;(S.cfg.calendars=S.cfg.calendars||[]).push({id:r.id,name:'משפחה'});save('cfg',S.cfg);renderTags();addLog('נוצר יומן משפחתי בגוגל');toast('נוצר יומן משפחה. עכשיו לשתף אותו מיומן גוגל עם החשבון השני.');}
   catch(err){toast('לא נוצר: '+err.message);}
   e.target.textContent='צור יומן משפחה';
 });
