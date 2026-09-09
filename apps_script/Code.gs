@@ -41,6 +41,7 @@ function doPost(e) {
       case 'calendars':      return json_({ calendars: calendars_() });
       case 'colors':         return json_(colors_());
       case 'shareCalendar':  return json_(shareCalendar_(b));
+      case 'updateCalendar': return json_(updateCalendar_(b));
       case 'deleteCalendar': return json_(deleteCalendar_(b));
       case 'createCalendar': return json_(createCalendar_(b));
       case 'createEvent':    return json_(createEvent_(b));
@@ -109,10 +110,22 @@ function shareCalendar_(b) {
   log_('shareCalendar', c.getName() + ' · ' + b.email);
   return { ok: true };
 }
+function updateCalendar_(b) {
+  if (!b.id) throw new Error('חסר מזהה יומן');
+  const c = CalendarApp.getCalendarById(b.id);
+  if (!c) throw new Error('לא נמצא יומן כזה');
+  const was = c.getName();
+  if (b.name && b.name !== was) c.setName(String(b.name));
+  if (b.color) c.setColor(String(b.color));
+  log_('updateCalendar', was + (b.name && b.name !== was ? ' ← ' + b.name : '') + (b.color ? ' · צבע' : ''));
+  return { ok: true, id: c.getId(), name: c.getName(), color: c.getColor() };
+}
 function deleteCalendar_(b) {
   if (!b.id) throw new Error('חסר מזהה יומן');
   const c = CalendarApp.getCalendarById(b.id);
   if (!c) throw new Error('לא נמצא יומן כזה');
+  // היומן הראשי אינו ניתן למחיקה, וגם אסור שיימחק בטעות
+  if (c.isMyPrimaryCalendar()) throw new Error('אי אפשר למחוק את היומן האישי הראשי');
   const name = c.getName();
   c.deleteCalendar();
   log_('deleteCalendar', name);
