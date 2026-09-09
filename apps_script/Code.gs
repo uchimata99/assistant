@@ -40,6 +40,8 @@ function doPost(e) {
       case 'agenda':         return json_(agenda_(b.days || 35));
       case 'calendars':      return json_({ calendars: calendars_() });
       case 'colors':         return json_(colors_());
+      case 'feedback':       return json_(feedback_(b));
+      case 'feedbackList':   return json_(feedbackList_());
       case 'shareCalendar':  return json_(shareCalendar_(b));
       case 'shareAll':       return json_(shareAllCalendars_());
       case 'updateCalendar': return json_(updateCalendar_(b));
@@ -93,6 +95,29 @@ function shareCal_(calendarId, email) {
   const code = r.getResponseCode();
   if (code === 200 || code === 201) return true;
   throw new Error('קוד ' + code + ': ' + r.getContentText().slice(0, 160));
+}
+// בקשות שינוי מהמשתמשים. נכתבות לגיליון המשותף, כדי ששני בני הזוג יראו את אותה רשימה
+// וכדי שאפשר יהיה לקרוא אותן בסשן עבודה הבא בלי לתלות את זה בזיכרון של מישהו.
+function feedback_(b) {
+  const text = String(b.text || '').trim();
+  if (!text) throw new Error('אין מה לשלוח');
+  const sid = PROPS.getProperty('SHARED_SHEET_ID');
+  if (!sid) throw new Error('לא מוגדר גיליון משותף');
+  const ss = SpreadsheetApp.openById(sid);
+  let sh = ss.getSheetByName('בקשות שינוי');
+  if (!sh) { sh = ss.insertSheet('בקשות שינוי'); sh.appendRow(['זמן', 'מי', 'מסך', 'הבקשה', 'טופל']); }
+  sh.appendRow([new Date(), String(b.who || ''), String(b.screen || ''), text, '']);
+  log_('feedback', text.slice(0, 120));
+  return { ok: true };
+}
+function feedbackList_() {
+  const sid = PROPS.getProperty('SHARED_SHEET_ID');
+  if (!sid) return { items: [] };
+  const ss = SpreadsheetApp.openById(sid);
+  const sh = ss.getSheetByName('בקשות שינוי');
+  if (!sh || sh.getLastRow() < 2) return { items: [] };
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
+  return { items: rows.map(r => ({ at: r[0], who: r[1], screen: r[2], text: r[3], done: !!r[4] })).reverse().slice(0, 50) };
 }
 function colors_() {
   const r = UrlFetchApp.fetch('https://www.googleapis.com/calendar/v3/colors', {
@@ -398,10 +423,11 @@ function parseReply_(text) {
 /* ---------- תקציר ערב: לוז המחר, ערב קודם ---------- */
 /*
  * ערוץ המסירה נקבע במאפיין DIGEST_CHANNEL:
- *   notify (מומלץ)     — אירוע קצר ביומן האישי בשעה שנבחרה, עם התקציר בתיאור ותזכורת קופצת.
- *                        יומן גוגל מצלצל בטלפון, לחיצה פותחת את הטקסט, ומשם העתקה ושיתוף.
+ *   email (ברירת מחדל) — נשלח בדואר אל הכתובת של בעל הסקריפט עצמו, ואף פעם לא לאף אחד אחר.
+ *                        ג'ימייל מצלצל בטלפון, ושום דבר לא נערם ביומן.
+ *   notify             — אירוע קצר ביומן האישי, עם התקציר בתיאור ותזכורת קופצת. למי שרוצה
+ *                        את התקציר בתוך היומן. יציאה מהערוץ הזה מוחקת את האירוע שנשאר.
  *   draft              — נשמר כטיוטה בג'ימייל. שומר על הכלל "לא שולחים מהקוד".
- *   email              — נשלח בדואר אל הכתובת של בעל הסקריפט עצמו, ואף פעם לא לאף אחד אחר.
  *   off                — כבוי.
  *
  * בערוץ notify הטריגר רץ שעתיים לפני שעת ההתראה, כי טריגר זמן באפס סקריפט מדויק
@@ -413,7 +439,7 @@ const DIGEST_FN = 'dailyDigest';
 function digestConfig_() {
   const installed = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === DIGEST_FN);
   return {
-    channel: PROPS.getProperty('DIGEST_CHANNEL') || 'notify',
+    channel: PROPS.getProperty('DIGEST_CHANNEL') || 'email',
     hour: Number(PROPS.getProperty('DIGEST_HOUR') || 21),
     installed: installed,
     to: selfEmail_(),
@@ -424,7 +450,7 @@ function selfEmail_() {
   return Session.getEffectiveUser().getEmail() || Session.getActiveUser().getEmail() || '';
 }
 function setDigest_(b) {
-  const channel = ['notify', 'draft', 'email', 'off'].indexOf(b.channel) >= 0 ? b.channel : 'notify';
+  const channel = ['notify', 'draft', 'email', 'off'].indexOf(b.channel) >= 0 ? b.channel : 'email';
   let hour = Number(b.hour); if (isNaN(hour) || hour < 0 || hour > 23) hour = 21;
   PROPS.setProperty('DIGEST_CHANNEL', channel);
   PROPS.setProperty('DIGEST_HOUR', String(hour));
@@ -435,6 +461,7 @@ function setDigest_(b) {
     const runAt = channel === 'notify' ? (hour + 22) % 24 : hour;
     ScriptApp.newTrigger(DIGEST_FN).timeBased().atHour(runAt).everyDays(1).create();
   }
+  if (channel !== 'notify') clearDigestEvent_();
   log_('setDigest', channel + ' @ ' + hour);
   return { ok: true, config: digestConfig_() };
 }
@@ -533,6 +560,15 @@ function postDigestEvent_(at) {
   PROPS.setProperty('DIGEST_EVENT_ID', ev.getId());
   log_('digest', 'נוצרה התראה ביומן ל־' + Utilities.formatDate(at, TZ, 'dd/MM HH:mm'), ev.getId(), cal.getId());
   return ev.getId();
+}
+
+// מוחקים רק את האירוע שאנחנו יצרנו, לפי המזהה השמור.
+function clearDigestEvent_() {
+  const prev = PROPS.getProperty('DIGEST_EVENT_ID');
+  if (!prev) return;
+  try { const old = CalendarApp.getDefaultCalendar().getEventById(prev); if (old) old.deleteEvent(); } catch (e) {}
+  PROPS.deleteProperty('DIGEST_EVENT_ID');
+  log_('digest', 'האירוע ביומן הוסר');
 }
 
 function dailyDigest() {
