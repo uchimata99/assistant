@@ -1133,7 +1133,10 @@ async function retrySync(){
 
 /* ===================== שיחה והצעות ===================== */
 function openChat(){ $('chat').classList.add('open'); $('chat').setAttribute('aria-hidden','false'); scrollMsgs(); }
-function closeChat(){ $('chat').classList.remove('open'); $('chat').setAttribute('aria-hidden','true'); }
+// יציאה מהשיחה מכבה את המיקרופון תמיד. מיקרופון שממשיך לרוץ מאחורי מסך סגור
+// הוא הפתעה, ולא פיצ'ר. stop ולא abort, כדי שמה שכבר הוכתב יישאר בשורת ההודעה.
+function stopMic(){ disarmTap(); if(rec&&listening){ try{ rec.stop(); }catch(e){} } }
+function closeChat(){ stopMic(); $('chat').classList.remove('open'); $('chat').setAttribute('aria-hidden','true'); }
 function scrollMsgs(){ const m=$('msgs'); requestAnimationFrame(()=>m.scrollTop=m.scrollHeight); }
 function addMsg(text,who,imgs){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text; (imgs||[]).forEach(src=>{const im=document.createElement('img'); im.src=src; d.appendChild(im);}); $('msgs').appendChild(d); scrollMsgs(); return d; }
 
@@ -1383,7 +1386,7 @@ function setupSpeech(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){ $('mic').style.display='none'; return; }
   rec=new SR(); rec.lang=S.cfg.voicelang; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1; let finalText='';
-  rec.onstart=()=>{listening=true;disarmTap();$('mic').classList.add('on');$('hint').textContent=T().speak;finalText='';};
+  rec.onstart=()=>{listening=true;disarmTap();$('mic').classList.add('on');$('hint').textContent=T().speak+' לעצירה — שוב על המיקרופון.';finalText='';};
   rec.onresult=ev=>{let interim='';for(const r of ev.results){if(r.isFinal)finalText+=r[0].transcript;else interim+=r[0].transcript;}$('input').value=(finalText+' '+interim).trim();autosize();$('send').disabled=!$('input').value.trim();};
   rec.onerror=ev=>{$('hint').textContent=ev.error==='not-allowed'?'צריך לאשר גישה למיקרופון בדפדפן.':ev.error==='no-speech'?T().retry:'שגיאת דיבור: '+ev.error;};
   rec.onend=()=>{listening=false;$('mic').classList.remove('on');if($('input').value.trim())$('hint').textContent='לשלוח? אפשר לתקן קודם.';};
@@ -1650,7 +1653,10 @@ if(new URLSearchParams(location.search).has('rec')){
 }
 setInterval(()=>{renderHeader();renderNow();renderDayRail();},60000);
 // בלי זה מטלה שבן או בת הזוג הוסיפו לא מופיעה עד רענון של הדף
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ loadAgenda(); loadTasks(); if(logSrc==='server') loadServerLog(); } });
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){ stopMic(); return; }
+  loadAgenda(); loadTasks(); if(logSrc==='server') loadServerLog();
+});
 // הכיתוב נמחק ברגע שמתחברים. קודם הוא נקבע פעם אחת בטעינה ונשאר תקוע גם אחרי חיבור.
 // הפלטה נקראת מגוגל ולא נשמרת בקוד, כדי שלא תתיישן אם גוגל ישנה אותה.
 async function loadPalette(){
