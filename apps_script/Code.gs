@@ -21,7 +21,7 @@
 const PROPS = PropertiesService.getScriptProperties();
 const TZ = Session.getScriptTimeZone();
 // עמודת "כובע" נשמרת ריקה: המושג בוטל, והעמודה נשארת כדי לא להזיז עמודות בגיליון קיים.
-const TASK_HEADER = ['מזהה', 'כותרת', '(לא בשימוש)', 'תגים', 'חשיבות', 'תאריך יעד', 'מהותית', 'בוצע', 'מי הוסיף', 'נוצר'];
+const TASK_HEADER = ['מזהה', 'כותרת', '(לא בשימוש)', 'תגים', 'חשיבות', 'תאריך יעד', 'מהותית', 'בוצע', 'מי הוסיף', 'נוצר', 'פריטים'];
 const LOG_HEADER = ['זמן', 'פעולה', 'פרטים', 'מזהה אירוע', 'מזהה יומן'];
 
 function doGet() { return json_({ ok: true, service: 'assistant', tz: TZ }); }
@@ -51,6 +51,7 @@ function doPost(e) {
       case 'addTask':        return json_(addTask_(b));
       case 'updateTask':     return json_(updateTask_(b));
       case 'deleteTask':     return json_(deleteTask_(b));
+      case 'syncTasks':      return json_(syncGoogleTasks_());
       case 'createDraft':    return json_(createDraft_(b));
       case 'log':            return json_({ entries: readLog_(b.limit || 120) });
       case 'digest':         return json_(digest_(b));
@@ -276,7 +277,7 @@ function taskTab_(shared) {
 function rowToTask_(r, shared) {
   return { id: String(r[0]), title: r[1], hat: r[2], tags: String(r[3] || '').split(',').map(s => s.trim()).filter(Boolean),
     importance: r[4] || 'normal', due: r[5] ? fmtDate_(r[5]) : '', mit: r[6] === true || r[6] === 'TRUE',
-    done: fmtDone_(r[7]), author: r[8] || '', shared: shared };
+    done: fmtDone_(r[7]), author: r[8] || '', shared: shared, items: parseItems_(r[10]) };
 }
 // done הוא תמיד מחרוזת: '' כשפתוח, אחרת 'yyyy-MM-dd'. גיליונות ישנים החזיקו גם TRUE.
 function fmtDone_(v) {
@@ -285,6 +286,13 @@ function fmtDone_(v) {
   return fmtDate_(v);
 }
 function fmtDate_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v); }
+// רשימת הפריטים נשמרת כ-JSON בתא אחד. עמודה לכל פריט הייתה מחייבת גיליון בגובה משתנה.
+function parseItems_(v) {
+  if (!v) return [];
+  try { const a = JSON.parse(v); return Array.isArray(a) ? a.filter(x => x && x.t).map(x => ({ t: String(x.t), d: !!x.d })) : []; }
+  catch (e) { return []; }
+}
+function itemsCell_(items) { return (items && items.length) ? JSON.stringify(items.map(x => ({ t: String(x.t || ''), d: !!x.d }))) : ''; }
 function listTasks_() {
   const out = [];
   const read = (sh, shared) => { if (!sh) return; const vals = sh.getDataRange().getValues(); for (let i = 1; i < vals.length; i++) if (vals[i][0]) out.push(rowToTask_(vals[i], shared)); };
@@ -299,7 +307,7 @@ function listTasks_() {
   });
 }
 function addTask_(t) {
-  taskTab_(!!t.shared).appendRow([t.id, t.title, t.hat || '', (t.tags || []).join(','), t.importance || 'normal', t.due || '', !!t.mit, t.done ? t.done : '', t.author || '', new Date()]);
+  taskTab_(!!t.shared).appendRow([t.id, t.title, t.hat || '', (t.tags || []).join(','), t.importance || 'normal', t.due || '', !!t.mit, t.done ? t.done : '', t.author || '', new Date(), itemsCell_(t.items)]);
   log_('addTask', (t.shared ? '[משותף] ' : '') + t.title);
   return { ok: true };
 }
@@ -313,6 +321,7 @@ function updateTask_(b) {
   if ('mit' in b) f.sh.getRange(f.row, 7).setValue(!!b.mit);
   if ('done' in b) f.sh.getRange(f.row, 8).setValue(b.done ? (typeof b.done === 'string' ? b.done : Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd')) : '');
   if ('title' in b) f.sh.getRange(f.row, 2).setValue(b.title);
+  if ('items' in b) f.sh.getRange(f.row, 11).setValue(itemsCell_(b.items));
   return { ok: true };
 }
 function deleteTask_(b) { const f = findTask_(b.id, b.shared); if (f) f.sh.deleteRow(f.row); return { ok: !!f }; }
@@ -341,6 +350,137 @@ function readLog_(limit) {
 
 /* ---------- ג'ימייל: טיוטה בלבד ---------- */
 function createDraft_(b) { GmailApp.createDraft(b.to || '', b.subject || '', b.body || ''); log_('createDraft', b.subject || ''); return { ok: true }; }
+
+
+/* ---------- גשר אל משימות גוגל ---------- */
+/*
+ * המטלות עצמן חיות בגיליון, כי רק גיליון אפשר לשתף בין שני החשבונות.
+ * משימות גוגל הן פרטיות לחשבון, ולכן כל שרת מסנכרן את המטלות שהוא רואה
+ * אל רשימת המשימות של בעליו. כך כל אחד רואה אותן ביומן גוגל שלו בטלפון,
+ * ובכל זאת שניכם עובדים על אותה רשימה משותפת.
+ *
+ * הקישור בין מטלה למשימת גוגל נשמר בגיליון הפרטי של כל חשבון, ולכן הוא
+ * לעולם לא מתנגש בין שניכם.
+ */
+const GT_BASE = 'https://tasks.googleapis.com/tasks/v1';
+const GT_LIST_NAME = 'העוזר';
+
+function gt_(method, path, payload) {
+  const res = UrlFetchApp.fetch(GT_BASE + path, {
+    method: method,
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    payload: payload ? JSON.stringify(payload) : undefined,
+    muteHttpExceptions: true,
+  });
+  const code = res.getResponseCode();
+  const text = res.getContentText();
+  if (code === 404) return null;
+  if (code >= 300) throw new Error('משימות גוגל ' + code + ': ' + text.slice(0, 200));
+  return text ? JSON.parse(text) : {};
+}
+
+function gtListId_() {
+  const saved = PROPS.getProperty('GTASKS_LIST_ID');
+  if (saved) { const still = gt_('get', '/users/@me/lists/' + saved); if (still) return saved; }
+  const lists = gt_('get', '/users/@me/lists') || {};
+  const found = (lists.items || []).filter(function (l) { return l.title === GT_LIST_NAME; })[0];
+  const id = found ? found.id : gt_('post', '/users/@me/lists', { title: GT_LIST_NAME }).id;
+  PROPS.setProperty('GTASKS_LIST_ID', id);
+  return id;
+}
+
+// מיפוי: מזהה המטלה שלנו, מפתח הפריט (ריק = המטלה עצמה), מזהה משימת גוגל.
+const GT_MAP_HEADER = ['מזהה מטלה', 'פריט', 'מזהה משימת גוגל'];
+function gtMapTab_() {
+  const ss = privateSheet_();
+  let sh = ss.getSheetByName('קישור למשימות גוגל');
+  if (!sh) { sh = ss.insertSheet('קישור למשימות גוגל'); sh.appendRow(GT_MAP_HEADER); }
+  return sh;
+}
+function gtMapRead_() {
+  const vals = gtMapTab_().getDataRange().getValues();
+  const map = {};
+  for (let i = 1; i < vals.length; i++) if (vals[i][0]) map[String(vals[i][0]) + '|' + String(vals[i][1] || '')] = { g: String(vals[i][2]), row: i + 1 };
+  return map;
+}
+
+function gtDue_(due) {
+  if (!due) return undefined;
+  // משימות גוגל שומרות תאריך בלבד, ותמיד ב-UTC בחצות.
+  return String(due) + 'T00:00:00.000Z';
+}
+
+function syncGoogleTasks_() {
+  const listId = gtListId_();
+  const sh = gtMapTab_();
+  const map = gtMapRead_();
+  const ours = listTasks_();
+  const byId = {};
+  ours.forEach(function (t) { byId[String(t.id)] = t; });
+
+  const remote = gt_('get', '/lists/' + listId + '/tasks?showCompleted=true&showHidden=true&maxResults=100') || {};
+  const gById = {};
+  (remote.items || []).forEach(function (g) { gById[g.id] = g; });
+
+  const adds = [];      // שורות מיפוי חדשות
+  const drops = [];     // שורות מיפוי למחיקה, מהסוף להתחלה
+  let pulled = 0, pushed = 0;
+
+  // משיכה: מה שסומן כבוצע בטלפון, בתוך משימות גוגל, נסגר גם אצלנו.
+  Object.keys(map).forEach(function (key) {
+    const parts = key.split('|');
+    const t = byId[parts[0]];
+    const g = gById[map[key].g];
+    if (!t) { if (g) gt_('delete', '/lists/' + listId + '/tasks/' + g.id); drops.push(map[key].row); return; }
+    if (!g) { drops.push(map[key].row); return; }
+    const doneThere = g.status === 'completed';
+    if (parts[1] === '') {
+      if (doneThere && !t.done) { updateTask_({ id: t.id, shared: t.shared, done: true }); pulled++; }
+    } else {
+      const i = Number(parts[1]);
+      const item = (t.items || [])[i];
+      if (item && doneThere && !item.d) { item.d = true; updateTask_({ id: t.id, shared: t.shared, items: t.items }); pulled++; }
+    }
+  });
+
+  // דחיפה: כל מטלה פתוחה שאין לה עדיין משימת גוגל.
+  ours.forEach(function (t) {
+    if (t.done) return;
+    const key = String(t.id) + '|';
+    let parentId = map[key] && gById[map[key].g] ? map[key].g : null;
+    if (!parentId) {
+      const g = gt_('post', '/lists/' + listId + '/tasks', { title: t.title, due: gtDue_(t.due), notes: t.shared ? 'משותף' : '' });
+      parentId = g.id; adds.push([t.id, '', g.id]); pushed++;
+    }
+    (t.items || []).forEach(function (item, i) {
+      const ik = String(t.id) + '|' + i;
+      if (map[ik] && gById[map[ik].g]) return;
+      const g = gt_('post', '/lists/' + listId + '/tasks?parent=' + encodeURIComponent(parentId), { title: item.t });
+      if (item.d) gt_('patch', '/lists/' + listId + '/tasks/' + g.id, { status: 'completed' });
+      adds.push([t.id, String(i), g.id]); pushed++;
+    });
+  });
+
+  // סגירה: מה שנסגר אצלנו נסגר גם שם.
+  ours.forEach(function (t) {
+    const key = String(t.id) + '|';
+    const m = map[key]; if (!m) return;
+    const g = gById[m.g]; if (!g) return;
+    if (t.done && g.status !== 'completed') gt_('patch', '/lists/' + listId + '/tasks/' + g.id, { status: 'completed' });
+    (t.items || []).forEach(function (item, i) {
+      const mi = map[String(t.id) + '|' + i]; if (!mi) return;
+      const gi = gById[mi.g]; if (!gi) return;
+      if (item.d && gi.status !== 'completed') gt_('patch', '/lists/' + listId + '/tasks/' + gi.id, { status: 'completed' });
+      if (!item.d && gi.status === 'completed') gt_('patch', '/lists/' + listId + '/tasks/' + gi.id, { status: 'needsAction' });
+    });
+  });
+
+  drops.sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); });
+  if (adds.length) sh.getRange(sh.getLastRow() + 1, 1, adds.length, 3).setValues(adds);
+  log_('syncTasks', 'נדחפו ' + pushed + ', נמשכו ' + pulled);
+  return { ok: true, pushed: pushed, pulled: pulled, tasks: listTasks_() };
+}
 
 /* ---------- שיחה עם קלוד ---------- */
 function model_() { return PROPS.getProperty('MODEL') || 'claude-sonnet-5'; }
@@ -372,7 +512,8 @@ function chat_(b) {
     'החזר אך ורק אובייקט JSON תקין, בלי טקסט מסביב ובלי סימני קוד:',
     '{"reply":"טקסט קצר בעברית","proposals":[',
     ' {"type":"event","title":"...","start":"ISO עם אזור זמן","end":"ISO","location":"","tags":["שם ילד"],"shared":false,"repeat":null,"why":"..."},',
-    ' {"type":"task","title":"...","tags":[],"shared":false,"importance":"high|normal","due":"YYYY-MM-DD","mit":false,"why":"..."},',
+    ' {"type":"task","title":"...","tags":[],"shared":false,"importance":"high|normal","due":"YYYY-MM-DD","mit":false,"items":[],"why":"..."},',
+    'מטלה עם רשימה: כשהבקשה מכילה כמה דברים לעשות תחת כותרת אחת — קניות, ציוד לטיול, הכנות לאירוע — החזר מטלה אחת עם items, מערך של מחרוזות קצרות, ולא מטלה נפרדת לכל פריט. מטלה רגילה מחזירה items ריק.',
     ' {"type":"email_draft","to":"","subject":"...","body":"...","why":"..."}',
     ']}',
     'אם אין פעולה להציע, proposals ריק.',
