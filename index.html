@@ -884,7 +884,7 @@ function taskRow(t){
   return `<div class="task ${t.done?'done':''}" data-id="${t.id}">
     <button class="chk" aria-label="סמן כבוצע" data-act="toggle"></button>
     <div class="body"><div class="t" dir="auto">${esc(t.title)}</div>
-      <div class="s">${tagChips(t.tags)}${(t.people||[]).map(n=>`<span class="owner">${esc(n)}</span>`).join('')}${sharedChip(t)}${t.importance==='high'?'<span>חשוב</span>':''}${t.due&&t.due!==ymd(new Date())?'<span>עד '+esc(t.due)+'</span>':''}</div></div>
+      <div class="s">${tagChips(t.tags)}${(t.people||[]).map(n=>`<span class="owner">${esc(n)}</span>`).join('')}${sharedChip(t)}${t.importance==='high'?'<span>חשוב</span>':''}${t.due&&t.due!==ymd(new Date())?'<span>עד '+esc(t.due)+'</span>':''}${t.remindAt?'<span>ביומן ב־'+esc(t.remindAt)+'</span>':''}</div></div>
     <button class="x" aria-label="מחק" data-act="del">×</button></div>`;
 }
 function renderTasks(){
@@ -1179,6 +1179,9 @@ function editForm(p){
       <label>כותרת<input type="text" data-e="title" value="${esc(p.title||'')}"></label>
       <div class="r">
         <label>עד תאריך<input type="date" data-e="due" value="${esc(p.due||'')}"></label>
+        <label>תזכורת ביומן<input type="time" data-e="remindAt" value="${esc(p.remindAt||'')}"></label>
+      </div>
+      <div class="r">
         <label>חשיבות<select data-e="importance">
           <option value="normal" ${p.importance!=='high'?'selected':''}>רגילה</option>
           <option value="high" ${p.importance==='high'?'selected':''}>חשובה</option>
@@ -1201,7 +1204,9 @@ function convertProposal(el,p,kind){
   if(kind===p.type) return;
   if(kind==='event'){
     const d=p.due||ymd(new Date());
-    p.start=mkISO(d,'09:00')||new Date().toISOString();
+    // אם כבר נבחרה שעת תזכורת, היא הופכת לשעת האירוע עצמו.
+    p.start=mkISO(d,p.remindAt||'09:00')||new Date().toISOString();
+    delete p.remindAt;
     p.end=new Date(new Date(p.start).getTime()+36e5).toISOString();
     delete p.due; delete p.mit;
   } else {
@@ -1232,7 +1237,7 @@ function refreshProp(el,p){
 }
 function describe(p){
   if(p.type==='event'){const s=new Date(p.start),e=new Date(p.end);return {kind:'פגישה ביומן',title:p.title,meta:`יום ${HE_DAYS[s.getDay()]} ${s.getDate()}.${s.getMonth()+1} · ${hhmm(s)}–${hhmm(e)}${p.location?' · '+p.location:''}`};}
-  if(p.type==='task') return {kind:'מטלה',title:p.title,meta:(p.importance==='high'?'חשוב · ':'')+(p.mit?'מהותית להיום · ':'')+(p.due?'עד '+p.due:'')};
+  if(p.type==='task') return {kind:'מטלה',title:p.title,meta:(p.importance==='high'?'חשוב · ':'')+(p.mit?'מהותית להיום · ':'')+(p.due?'עד '+p.due:'')+(p.remindAt?' · תזכורת ביומן ב־'+p.remindAt:'')};
   if(p.type==='email_draft') return {kind:'טיוטת מייל (לא נשלחת)',title:p.subject||'ללא נושא',meta:(p.to?'אל: '+p.to+'\n':'')+(p.body||'')};
   return {kind:p.type,title:JSON.stringify(p),meta:''};
 }
@@ -1294,7 +1299,7 @@ async function approve(id,el){
       addLog('נקבע ב'+dest.name+': '+title+' ('+describe(p).meta+(rep?' · חוזר '+(FREQ_HE[rep.freq]||'')+' עד '+shortDate(rep.until):'')+')',{by:'באישורך',undoable:true,eventId:r.id,calendarId:dest.id,series:!!r.series});
       await loadAgenda();
     } else if(p.type==='task'){
-      const t={id:'t'+Date.now(),title:p.title,tags:p.tags||[],people:p.people||[],shared:!!p.shared,author:S.cfg.me,importance:p.importance||'normal',due:p.due||ymd(new Date()),mit:!!p.mit,done:'',synced:demo()};
+      const t={id:'t'+Date.now(),title:p.title,tags:p.tags||[],people:p.people||[],shared:!!p.shared,author:S.cfg.me,importance:p.importance||'normal',due:p.due||ymd(new Date()),mit:!!p.mit,done:'',synced:demo(),remindAt:p.remindAt||''};
       let dropped=false;
       if(t.mit&&S.tasks.filter(x=>x.mit&&!x.done).length>=S.cfg.mitmax){ t.mit=false; dropped=true; }
       S.tasks.push(t); save('tasks',S.tasks); renderTasks();
@@ -1304,6 +1309,22 @@ async function approve(id,el){
       if(!demo()){
         try{ await api('addTask',t); t.synced=true; }
         catch(err){ t.synced=false; toast('נשמרה רק במכשיר הזה. אנסה לסנכרן שוב.'); }
+        // מטלה חיה ברשימה ולא ביומן גוגל. מי שרוצה לראות אותה גם ביומן מבקש שעה,
+        // ואז נוצר לצידה אירוע קצר. המטלה נשארת מקור האמת; האירוע רק מזכיר.
+        if(t.remindAt){
+          const at=mkISO(t.due,t.remindAt);
+          if(at){
+            const dest=t.shared?targetCal(p):{id:'',name:'היומן האישי שלך'};
+            try{
+              const r=await api('createEvent',{title:t.title,start:at,end:new Date(new Date(at).getTime()+9e5).toISOString(),location:'',description:'תזכורת למטלה מהעוזר של '+S.cfg.me,calendarId:dest.id,reminders:reminderList()});
+              t.remindEventId=r.id; t.remindCal=dest.id;
+              addLog('נוספה תזכורת ל'+t.title+' ב־'+t.remindAt+' · '+dest.name,{by:'באישורך',undoable:true,eventId:r.id,calendarId:dest.id});
+              // בלי המתנה: אפס סקריפט מטפל בבקשה אחת בכל רגע, והמתנה כאן
+              // השאירה את הכרטיס על "מבצע..." עוד חצי דקה אחרי שהכול כבר נעשה.
+              loadAgenda();
+            }catch(err){ toast('המטלה נשמרה, אבל התזכורת ביומן נכשלה: '+err.message); }
+          }
+        }
         save('tasks',S.tasks); renderTasks();
       }
     } else if(p.type==='email_draft'){
@@ -1589,7 +1610,11 @@ let pressT=null;
     const b=e.target.closest('button[data-act]'); if(!b) return;
     const row=b.closest('.task'); const t=S.tasks.find(x=>x.id===row.dataset.id); if(!t) return;
     if(b.dataset.act==='toggle'){t.done=t.done?'':ymd(new Date());addLog((t.done?'סומנה כבוצעה: ':'הוחזרה לפתוחות: ')+t.title);if(!demo())api('updateTask',{id:t.id,shared:t.shared,done:!!t.done}).catch(()=>{});}
-    if(b.dataset.act==='del'){S.tasks=S.tasks.filter(x=>x!==t);addLog('נמחקה מטלה: '+t.title);if(!demo())api('deleteTask',{id:t.id,shared:t.shared}).catch(()=>{});}
+    if(b.dataset.act==='del'){S.tasks=S.tasks.filter(x=>x!==t);addLog('נמחקה מטלה: '+t.title);
+      if(!demo()){ api('deleteTask',{id:t.id,shared:t.shared}).catch(()=>{});
+        // התזכורת נוצרה יחד עם המטלה, ולכן היא הולכת יחד איתה. אחרת נשארת ביומן
+        // התראה על משהו שכבר לא קיים.
+        if(t.remindEventId) api('deleteEvent',{id:t.remindEventId,calendarId:t.remindCal||''}).then(()=>loadAgenda()).catch(()=>{}); } }
     save('tasks',S.tasks); renderTasks();
   });
   const startPress=e=>{const row=e.target.closest('.task');if(!row||e.target.closest('button'))return;pressT=setTimeout(()=>{const t=S.tasks.find(x=>x.id===row.dataset.id);if(!t)return;if(!t.mit&&S.tasks.filter(x=>x.mit&&!x.done).length>=S.cfg.mitmax){toast('כבר יש '+S.cfg.mitmax+' מטלות מהותיות להיום.');return;}t.mit=!t.mit;save('tasks',S.tasks);renderTasks();if(!demo())api('updateTask',{id:t.id,shared:t.shared,mit:t.mit}).catch(()=>{});toast(t.mit?'קודמה למהותיות של היום':'הוחזרה לשאר המטלות');},550);};
