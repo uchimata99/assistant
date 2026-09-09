@@ -196,8 +196,8 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .prop .who4{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center}
 .prop .who4 .lbl{font-size:var(--fs-2);color:var(--ink-2);margin-inline-end:2px}
 .prop .who4 button{padding:8px 12px;border-radius:999px;background:var(--field);font-size:var(--fs-2);color:var(--ink-2);min-height:40px;border:1px solid transparent}
-.prop .who4 button.kid{border-color:color-mix(in srgb,var(--tag) 45%,transparent);color:var(--ink)}
-.prop .who4 button.kid[aria-pressed="true"]{background:color-mix(in srgb,var(--tag) 20%,var(--card));border-color:var(--tag);font-weight:600}
+.prop .who4 button.kid{background:color-mix(in srgb,var(--tag) 14%,var(--card));border-color:color-mix(in srgb,var(--tag) 45%,transparent);color:var(--ink)}
+.prop .who4 button.kid[aria-pressed="true"]{background:color-mix(in srgb,var(--tag) 34%,var(--card));border-color:var(--tag);font-weight:600}
 .prop .who4 button.grown[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
 .prop.done .who4 button{display:none}
 .prop .vis{display:flex;gap:6px;margin-top:10px}
@@ -678,11 +678,18 @@ function accentOf(x){
   // מטלות אינן יושבות ביומן, ולכן אצלן הצבע מגיע מהילד.
   const k=((x&&x.tags)||[])[0];
   const tg=k?tagOf(k):null;
-  if(tg) return {name:tg.name||'', color:tg.color||'#8A8F95'};
+  if(tg) return {name:tg.name||'', color:tagColor(tg)};
   if(x&&x.shared) return {name:'משותף', color:'#5B6570'};
   return {name:'', color:'#8A8F95'};
 }
 function tagOf(key){ return S.cfg.tags.find(t=>t.key===key); }
+// הצבע של ילד מגיע מהיומן שלו, אם יש כזה. הצבע השמור בתג הוא רק גיבוי
+// לתג בלי יומן, כדי שלא יהיו שני מקורות אמת לאותו צבע.
+function tagColor(tg){
+  if(!tg) return '#8A8F95';
+  if(tg.calendarId){ const c=(S.cfg.calendars||[]).find(c=>c.id===tg.calendarId); if(c&&c.color) return c.color; }
+  return tg.color||'#8A8F95';
+}
 function tagByName(n){ n=(n||'').trim(); return S.cfg.tags.find(t=>t.name===n||t.aliases.includes(n)); }
 // שם לא אמור להיתפס בתוך מילה אחרת — "רון" בתוך "רונית". מפרקים למילים ומתירים
 // רק קידומות עבריות של אות אחת. ש ו־ה אינן ברשימה, כי "שרון" היא מילה בפני עצמה.
@@ -701,7 +708,7 @@ function guessTags(text,calendarId,calendarName){
   ).map(tg=>tg.key);
 }
 function normTags(list){ return (list||[]).map(x=>tagOf(x)?x:(tagByName(x)||{}).key).filter(Boolean); }
-function tagChips(keys){ return (keys||[]).map(k=>{const tg=tagOf(k);return tg?`<span class="tag" style="${hatVars(tg.color).replace(/--hat/g,'--tag')};--tag-ink:${safeOn(tg.color,SURF_LIGHT)}">${esc(tg.name)}</span>`:'';}).join(''); }
+function tagChips(keys){ return (keys||[]).map(k=>{const tg=tagOf(k);if(!tg) return '';const col=tagColor(tg);return `<span class="tag" style="${hatVars(col).replace(/--hat/g,'--tag')};--tag-ink:${safeOn(col,SURF_LIGHT)}">${esc(tg.name)}</span>`;}).join(''); }
 function sharedChip(x){ return x.shared ? `<span class="shared">${SHARE_ICON}${x.author&&x.author!==S.cfg.me?esc(x.author):'משותף'}</span>` : ''; }
 let filterTag=null;
 const passFilter=keys=>!filterTag||(keys||[]).includes(filterTag);
@@ -1015,13 +1022,16 @@ $('calendars').addEventListener('click',async e=>{
 });
 function renderTags(){
   const pal=S.cfg.palette||[];
-  const swatch=(t)=>pal.length
+  // לילד עם יומן הצבע נקבע ביומן עצמו, ולכן כאן הוא רק מוצג. מקור אמת אחד.
+  const swatch=(t)=>t.calendarId
+    ? `<span class="sw" style="background:${tagColor(t)}"></span>`
+    : pal.length
     ? `<button type="button" class="sw" data-act="pick" style="background:${t.color}" aria-label="צבע"></button>`
     : `<input type="color" class="sw" value="${t.color}" aria-label="צבע">`;
-  const palHtml=(t)=>pal.length
+  const palHtml=(t)=>(!t.calendarId&&pal.length)
     ? `<div class="pal" hidden>${pal.map(c=>`<button type="button" class="psw" data-c="${c}" aria-pressed="${c.toLowerCase()===String(t.color).toLowerCase()}" style="background:${c}" aria-label="צבע ${c}"></button>`).join('')}</div>`
     : '';
-  $('tags').innerHTML=S.cfg.tags.map((t,i)=>`<div class="tagrow" data-i="${i}" data-color="${t.color}">
+  $('tags').innerHTML=S.cfg.tags.map((t,i)=>`<div class="tagrow" data-i="${i}" data-color="${tagColor(t)}">
       ${swatch(t)}
       <input type="text" value="${esc(t.name)}" data-f="name" placeholder="שם" aria-label="שם">
       <input type="text" value="${esc(t.aliases.join(', '))}" data-f="aliases" placeholder="כינויים, בפסיקים" aria-label="כינויים">
@@ -1138,7 +1148,7 @@ function addProposal(p){
     ${p.why?`<div class="why">${esc(p.why)}</div>`:''}
     <div class="who4">
       <span class="lbl">${((p.tags||[]).length||(p.people||[]).length)?'שויך אל':'למי זה שייך?'}</span>
-      ${(S.cfg.tags||[]).map(t=>`<button class="kid" data-kid="${esc(t.key)}" aria-pressed="${(p.tags||[]).includes(t.key)}" style="${hatVars(t.color).replace(/--hat/g,'--tag')}">${esc(t.name)}${ageOf(t.dob)!==null?' · '+ageOf(t.dob):''}</button>`).join('')}
+      ${(S.cfg.tags||[]).map(t=>`<button class="kid" data-kid="${esc(t.key)}" aria-pressed="${(p.tags||[]).includes(t.key)}" style="${hatVars(tagColor(t)).replace(/--hat/g,'--tag')}">${esc(t.name)}${ageOf(t.dob)!==null?' · '+ageOf(t.dob):''}</button>`).join('')}
       ${peopleNames().map(n=>`<button class="grown" data-who="${esc(n)}" aria-pressed="${(p.people||[]).includes(n)}">${esc(n)}</button>`).join('')}
     </div>
     ${canShare?`<div class="vis"><button data-vis="0" aria-pressed="${!p.shared}">${LOCK_ICON}פרטי</button><button data-vis="1" aria-pressed="${p.shared}">${SHARE_ICON}משותף</button><span class="status dest"></span></div>`:''}
