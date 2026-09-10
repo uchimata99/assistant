@@ -245,9 +245,14 @@ function remindEvent_(b) {
     let ev = null;
     try { ev = c.getEventById(b.id); } catch (e) {}
     if (!ev) continue;
-    applyReminders_(ev, Array.isArray(b.reminders) ? b.reminders : [60]);
-    log_('remindEvent', ev.getTitle() + ' · ' + (b.reminders || [60]).join(','), b.id, c.getId());
-    return { ok: true, title: ev.getTitle(), start: ev.getStartTime().toISOString(), calendarId: c.getId() };
+    // מיזוג ולא דריסה: תזכורת שמתווספת אינה מבטלת את מה שכבר היה על האירוע.
+    const had = (function () { try { return ev.getPopupReminders() || []; } catch (e) { return []; } })();
+    const want = Array.isArray(b.reminders) ? b.reminders : [60];
+    const all = b.replace ? want : had.concat(want);
+    applyReminders_(ev, all.map(Number).filter(function (m, i, a) { return !isNaN(m) && a.indexOf(m) === i; }).sort(function (x, y) { return y - x; }));
+    log_('remindEvent', ev.getTitle() + ' · ' + all.join(','), b.id, c.getId());
+    return { ok: true, title: ev.getTitle(), start: ev.getStartTime().toISOString(), calendarId: c.getId(),
+             reminders: (function () { try { return ev.getPopupReminders() || []; } catch (e) { return all; } })() };
   }
   throw new Error('האירוע לא נמצא ביומן');
 }
@@ -527,7 +532,7 @@ function chat_(b) {
     'פרטי או משותף: shared=true כשמדובר בילד, במשפחה, בבית, או כשנאמר במפורש "משותף", "לשנינו", "שבן או בת הזוג יראו". אחרת shared=false והפריט נשאר פרטי ביומן האישי. תמיד אפשר לשנות בכרטיס.',
     'תמונות והודעות מועברות: אם צורפה תמונה (צילום מסך של ווטסאפ, הזמנה, לוח חוגים, מכתב מבית הספר) או הודבק טקסט מועבר — חלץ ממנו את כל האירועים והמטלות, כל אחד כהצעה נפרדת עם תאריך ושעה מדויקים. אם השנה חסרה, הנח את המועד הקרוב הבא. ציין ב־why מאיפה נלקח כל פרט. אם משהו לא ברור בתמונה, שאל במקום לנחש.',
     'אירוע חוזר: כשנאמר "כל שבוע", "כל יום", "כל חודש", "קבוע" או "חוזר", מלא repeat={"freq":"daily|weekly|monthly","until":"YYYY-MM-DD"}. את until ממלאים רק אם נאמר עד מתי במפורש; אחרת until="" ואל תמציא תאריך. באירוע שאינו חוזר repeat=null.',
-    'תזכורות לאירוע חדש: ברירת המחדל היא שעה לפני, ואין צורך לציין זאת. אם נאמרה תזכורת אחרת — "יום לפני", "רבע שעה לפני", "יומיים לפני" — החזר באירוע שדה remind עם מערך דקות, למשל [1440]. אם נאמר "בלי תזכורת" החזר remind ריק.',
+    'תזכורות לאירוע חדש: תזכורת של שעה לפני נוספת תמיד, ואין צורך לציין אותה. אם נאמרה תזכורת נוספת — "יום לפני", "רבע שעה לפני", "יומיים לפני" — החזר בשדה remind רק את התוספת, למשל [1440]; היא מצטרפת לקבועה ואינה מחליפה אותה. רק אם נאמר במפורש "בלי תזכורת" או "תבטל את התזכורות" החזר remind ריק [].',
     'תזכורת לאירוע קיים: כשנאמר "תוסיף תזכורת ל..." בלי לקבוע אירוע חדש, מצא ברשימת האירועים שקיבלת את האירוע שהכי מתאים לתיאור — גם אם השם אינו מדויק — והחזר הצעה מסוג reminder עם ה-eventId שלו. ב-why כתוב לאיזה אירוע התכוונת ולמה, כדי שהמשתמש יוכל לאשר שזיהית נכון. אם יותר מאירוע אחד מתאים, החזר הצעה לכל אחד מהם ותן למשתמש לבחור. אם אף אירוע לא מתאים, אל תמציא — אמור זאת ב-reply.',
     'שיוך למי שמדבר: "לי", "אליי", "שלי", "ביומן שלי" מתכוונים למשתמש עצמו — shared=false, tags ריק, ו-people ריק. שם של ילד מתכוון לילד, עם התג שלו. שם בן או בת הזוג מתכוון להם, ב-people.',
     'תזכורת מול מטלה: אם נאמר "ביומן", "תזכורת ביומן", "תקבע", או שנאמרה שעה ביום — החזר event, לא task. task הוא רק פריט ברשימה, בלי שעה. מטלה נכנסת לרשימת המטלות בלבד ולעולם לא ליומן גוגל, ולכן אסור לתאר task בתשובה כמשהו שנכנס "ליומן".',

@@ -434,6 +434,13 @@ details[open]>summary{border-bottom:1px solid var(--line)}
           <option value="0">כבוי</option>
           <option value="1">דלוק — שליחה, הקראה ואישור בקול</option>
         </select>
+        <label for="wheel">כפתור ההגה או האוזניות</label>
+        <select id="wheel">
+          <option value="0">לא בשימוש</option>
+          <option value="1">לחיצה מתחילה הקלטה</option>
+        </select>
+        <div class="note">כדי לתפוס את הכפתור האפליקציה נרשמת כנגן, ולכן בזמן שהיא פתוחה המוזיקה עלולה להיעצר, והכפתור לא ידלג שיר.</div>
+
         <label for="openmode">כשהאפליקציה נפתחת</label>
         <select id="openmode">
           <option value="now">מסך היום</option>
@@ -529,7 +536,7 @@ const PROFILES = {
   f: { me:'', gender:'f' },
 };
 const DEFAULTS = {
-  profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL', openMode:'now', drive:false,
+  profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL', openMode:'now', drive:false, wheel:false,
   remind:'60', digestChannel:'email', digestHour:21, partnerName:'',
   familyCalendarId:'',
   // התגים נוספים בהגדרות: שם, כינויים לזיהוי בדיבור ובהודעות, ויומן מהרשימה.
@@ -1103,7 +1110,7 @@ function readTagsFromForm(){
 }
 function renderSettings(){
   renderInstall();
-  $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang; $('openmode').value=S.cfg.openMode||'now'; $('drive').value=S.cfg.drive?'1':'0';
+  $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang; $('openmode').value=S.cfg.openMode||'now'; $('drive').value=S.cfg.drive?'1':'0'; $('wheel').value=S.cfg.wheel?'1':'0';
   $('secret').value=S.cfg.secret||''; $('remind').value=S.cfg.remind||''; $('pname').value=S.cfg.partnerName||'';
   $('digesth').innerHTML=Array.from({length:24},(_,h)=>`<option value="${h}" ${h===+S.cfg.digestHour?'selected':''}>${pad(h)}:00</option>`).join('');
   $('digestch').value=S.cfg.digestChannel||'email';
@@ -1187,6 +1194,15 @@ function remindOptions(sel){
   return REMIND_OPTS.map(o=>`<option value="${o[0]}" ${o[0]===cur?'selected':''}>${o[1]}</option>`).join('')
     +`<option value="-1" ${cur===-1?'selected':''}>בלי תזכורת</option>`;
 }
+// הקבועה תמיד נשארת. מערך ריק שהגיע מהמנוע הוא בקשה מפורשת לבטל הכול.
+function remindFor(p){
+  const base=reminderList();
+  if(!Array.isArray(p.remind)) return base;
+  if(!p.remind.length) return [];
+  return base.concat(p.remind.map(Number).filter(m=>!isNaN(m))).filter((m,i,a)=>a.indexOf(m)===i).sort((x,y)=>y-x);
+}
+// מה שנוסף מעבר לקבוע. רק זה נאמר בקול — אין טעם להקריא כל פעם "שעה לפני".
+function extraRemind(mins){ const base=reminderList(); return (mins||[]).filter(m=>base.indexOf(m)<0); }
 function remindWords(mins){
   const list=(mins||[]).map(Number).filter(m=>!isNaN(m));
   if(!list.length) return 'בלי תזכורת';
@@ -1219,7 +1235,7 @@ function editForm(p){
         </select></label>
         <label>עד תאריך<input type="date" data-e="until" value="${esc(r.until||'')}"></label>
       </div>
-      <label>תזכורת<select data-e="remind">${remindOptions(p.remind)}</select></label>
+      <label>תזכורת נוספת<select data-e="remind">${remindOptions(p.remind)}</select></label>
     </div>`;
   }
   if(p.type==='reminder'){
@@ -1288,7 +1304,7 @@ function refreshProp(el,p){
   updateDest(el,p);
 }
 function describe(p){
-  if(p.type==='event'){const s=new Date(p.start),e=new Date(p.end);return {kind:'פגישה ביומן',title:p.title,meta:`יום ${HE_DAYS[s.getDay()]} ${s.getDate()}.${s.getMonth()+1} · ${hhmm(s)}–${hhmm(e)}${p.location?' · '+p.location:''} · ${remindWords(Array.isArray(p.remind)?p.remind:reminderList())}`};}
+  if(p.type==='event'){const s=new Date(p.start),e=new Date(p.end);return {kind:'פגישה ביומן',title:p.title,meta:`יום ${HE_DAYS[s.getDay()]} ${s.getDate()}.${s.getMonth()+1} · ${hhmm(s)}–${hhmm(e)}${p.location?' · '+p.location:''} · ${remindWords(remindFor(p))}`};}
   if(p.type==='task') return {kind:'מטלה',title:p.title,meta:(p.importance==='high'?'חשוב · ':'')+(p.mit?'מהותית להיום · ':'')+(p.due?'עד '+p.due:'')+(p.remindAt?' · תזכורת ביומן ב־'+p.remindAt:'')+((p.items||[]).length?' · '+p.items.length+' פריטים':'')};
   if(p.type==='reminder'){
     const d=p.start?new Date(p.start):null;
@@ -1309,7 +1325,9 @@ function targetCal(p){ // לאן נכנס אירוע משותף
 }
 function addProposal(p){
   const id='p'+Date.now()+Math.random().toString(36).slice(2,6);
-  p.tags=normTags(p.tags); if(!p.tags.length) p.tags=guessTags((p.title||'')+' '+(p.body||''));
+  // ניחוש רק כשלא נאמר במפורש שזה פרטי. "תכניס לי" הוא החלטה, לא חוסר מידע.
+  p.tags=normTags(p.tags);
+  if(!p.tags.length && p.shared!==false) p.tags=guessTags((p.title||'')+' '+(p.body||''));
   // המנוע מחזיר פריטים כמחרוזות; בפנים הם תמיד {t,d} כדי שאפשר יהיה לסמן אותם.
   p.items=(p.items||[]).map(x=>typeof x==='string'?{t:x,d:false}:{t:String((x&&x.t)||''),d:!!(x&&x.d)}).filter(x=>x.t);
   if(p.shared==null) p.shared=p.tags.length>0;
@@ -1355,7 +1373,7 @@ async function approve(id,el){
       const forWho=(p.people||[]).length?'אחראי: '+p.people.join(', ')+String.fromCharCode(10):'';
       const rep=(p.repeat&&p.repeat.freq&&p.repeat.until)?p.repeat:null;
       // ברירת מחדל קבועה: שעה לפני. מה שנאמר בבקשה גובר עליה.
-      const mins=Array.isArray(p.remind)?p.remind:reminderList();
+      const mins=remindFor(p);
       const r=await api('createEvent',{title,start:p.start,end:p.end,location:p.location||'',description:forWho+'נוצר על ידי העוזר של '+S.cfg.me,calendarId:dest.id,reminders:mins,repeat:rep});
       addLog('נקבע ב'+dest.name+': '+title+' ('+describe(p).meta+' · '+remindWords(mins)+(rep?' · חוזר '+(FREQ_HE[rep.freq]||'')+' עד '+shortDate(rep.until):'')+')',{by:'באישורך',undoable:true,eventId:r.id,calendarId:dest.id,series:!!r.series});
       await loadAgenda();
@@ -1671,7 +1689,7 @@ function spokenCard(p){
       +', בשעה '+hhmm(a)+' עד '+hhmm(b)
       +(p.location?', ב'+p.location:'')
       +(p.repeat&&p.repeat.freq?', חוזר '+(FREQ_HE[p.repeat.freq]||''):'')
-      +'. '+remindWords(Array.isArray(p.remind)?p.remind:reminderList());
+      +(extraRemind(remindFor(p)).length?'. '+remindWords(extraRemind(remindFor(p))):'');
   }
   if(p.type==='task'){
     const d=p.due?new Date(p.due):null;
@@ -1684,7 +1702,7 @@ function spokenCard(p){
     const d=p.start?new Date(p.start):null;
     return 'תזכורת לאירוע קיים. '+(p.title||'')
       +(d&&!isNaN(d)?'. יום '+HE_DAYS[d.getDay()]+', '+d.getDate()+' ב'+HE_MONTHS[d.getMonth()]+', בשעה '+hhmm(d):'')
-      +'. '+remindWords(p.minutes);
+      +(extraRemind(p.minutes).length?'. '+remindWords(extraRemind(p.minutes)):'');
   }
   if(p.type==='email_draft') return 'טיוטת מייל. '+(p.subject||'ללא נושא');
   return describe(p).title;
@@ -1735,7 +1753,8 @@ function scheduleAutoSend(){
  * להחזיק את מוקד המדיה — ומתרגמת לחיצה לפתיחת הקלטה.
  *
  * המחיר: כל עוד המצב דלוק, כפתור ההגה שייך לעוזר ולא לספוטיפיי. לכן הוא
- * נדלק רק יחד עם מצב נהיגה, ונכבה כשיוצאים ממנו.
+ * נדלק רק כשמבקשים אותו במפורש בהגדרות, בנפרד ממצב נהיגה, כי הוא לוקח
+ * לעצמו את שליטת המדיה כל עוד האפליקציה פתוחה.
  */
 let mediaHook=null;
 // קובץ שמע זעיר ושקט. שנייה אחת של דממה בפורמט wav, מוטבעת ולא נטענת מרשת.
@@ -1761,7 +1780,7 @@ function driveButtonOff(){
   }
   mediaHook=null;
 }
-function syncDriveButton(){ if(S.cfg.drive) driveButtonOn(); else driveButtonOff(); }
+function syncDriveButton(){ if(S.cfg.wheel) driveButtonOn(); else driveButtonOff(); }
 
 /* ===================== אירועי ממשק ===================== */
 function autosize(){const t=$('input');t.style.height='auto';t.style.height=Math.min(t.scrollHeight,120)+'px';}
@@ -1908,7 +1927,7 @@ $('digesttest').addEventListener('click',async()=>{
 });
 
 $('save').addEventListener('click',()=>{
-  S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.openMode=$('openmode').value; S.cfg.drive=$('drive').value==='1'; S.cfg.familyCalendarId=$('famcal').value;
+  S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.openMode=$('openmode').value; S.cfg.drive=$('drive').value==='1'; S.cfg.wheel=$('wheel').value==='1'; S.cfg.familyCalendarId=$('famcal').value;
   S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.partnerName=$('pname').value.trim(); S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
   S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
   save('cfg',S.cfg); syncDriveButton(); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
