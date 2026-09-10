@@ -428,6 +428,11 @@ details[open]>summary{border-bottom:1px solid var(--line)}
     <h2>הקלטה מהירה</h2>
     <div class="card">
       <div class="form">
+        <label for="drive">מצב נהיגה</label>
+        <select id="drive">
+          <option value="0">כבוי</option>
+          <option value="1">דלוק — שליחה, הקראה ואישור בקול</option>
+        </select>
         <label for="openmode">כשהאפליקציה נפתחת</label>
         <select id="openmode">
           <option value="now">מסך היום</option>
@@ -484,7 +489,7 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 
 <div class="chat" id="chat" aria-hidden="true">
   <div class="bar">
-    <h3>שיחה</h3>
+    <h3>שיחה<span id="drivetag" hidden> · נהיגה</span></h3>
     <button class="ib" id="closechat" aria-label="סגור"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div class="msgs" id="msgs"></div>
@@ -523,7 +528,7 @@ const PROFILES = {
   f: { me:'', gender:'f' },
 };
 const DEFAULTS = {
-  profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL', openMode:'now',
+  profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL', openMode:'now', drive:false,
   remind:'30', digestChannel:'email', digestHour:21, partnerName:'',
   familyCalendarId:'',
   // התגים נוספים בהגדרות: שם, כינויים לזיהוי בדיבור ובהודעות, ויומן מהרשימה.
@@ -1097,7 +1102,7 @@ function readTagsFromForm(){
 }
 function renderSettings(){
   renderInstall();
-  $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang; $('openmode').value=S.cfg.openMode||'now';
+  $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang; $('openmode').value=S.cfg.openMode||'now'; $('drive').value=S.cfg.drive?'1':'0';
   $('secret').value=S.cfg.secret||''; $('remind').value=S.cfg.remind||''; $('pname').value=S.cfg.partnerName||'';
   $('digesth').innerHTML=Array.from({length:24},(_,h)=>`<option value="${h}" ${h===+S.cfg.digestHour?'selected':''}>${pad(h)}:00</option>`).join('');
   $('digestch').value=S.cfg.digestChannel||'email';
@@ -1152,7 +1157,7 @@ async function retrySync(){
 }
 
 /* ===================== שיחה והצעות ===================== */
-function openChat(){ $('chat').classList.add('open'); $('chat').setAttribute('aria-hidden','false'); scrollMsgs(); }
+function openChat(){ $('drivetag').hidden=!S.cfg.drive; $('chat').classList.add('open'); $('chat').setAttribute('aria-hidden','false'); scrollMsgs(); }
 // יציאה מהשיחה מכבה את המיקרופון תמיד. מיקרופון שממשיך לרוץ מאחורי מסך סגור
 // הוא הפתעה, ולא פיצ'ר. stop ולא abort, כדי שמה שכבר הוכתב יישאר בשורת ההודעה.
 // שורת הרמז יושבת בשורת ההודעה המקובעת, ולכן היא נראית גם במסך הבית.
@@ -1161,7 +1166,7 @@ const chatOpen=()=>$('chat').classList.contains('open');
 function stopMic(){ disarmTap(); if(rec&&listening){ try{ rec.stop(); }catch(e){} } renderHint(); }
 // סוגרים קודם, ורק אז עוצרים. כך גם onend, שמגיע רגע אחר כך, כבר יודע
 // שהשיחה סגורה ומנקה את השורה במקום לכתוב בה "לשלוח?".
-function closeChat(){ $('chat').classList.remove('open'); $('chat').setAttribute('aria-hidden','true'); stopMic(); }
+function closeChat(){ $('chat').classList.remove('open'); $('chat').setAttribute('aria-hidden','true'); cancelAutoSend(); driveStop(); stopMic(); }
 function scrollMsgs(){ const m=$('msgs'); requestAnimationFrame(()=>m.scrollTop=m.scrollHeight); }
 // הודעת תקלה עם כפתור: בלי זה צריך להקליד מחדש את כל הבקשה, וזה בדיוק הרגע
 // שבו המשתמש מוותר.
@@ -1308,9 +1313,15 @@ function addProposal(p){
   // חזרתי בלי "עד מתי" — פותחים את העריכה מיד, כי בלי זה אי אפשר לאשר.
   if(repWarn(p)){ const ed=el.querySelector('.edit'); if(ed){ ed.hidden=false; el.querySelector('.fix').setAttribute('aria-pressed','true'); } }
   scrollMsgs();
+  return el;
 }
 function updateDest(el,p){ const d=el.querySelector('.dest'); if(!d) return; d.textContent = p.type==='event' ? (p.shared?targetCal(p).name:'היומן האישי שלך') : (p.shared?'ברשימה המשותפת':'רק אצלך'); }
 
+function reject(id,el){
+  const p=S.pending[id]; if(!p) return;
+  el.classList.add('done'); el.querySelector('.status:not(.dest)').textContent='נדחה';
+  addLog('נדחתה הצעה: '+describe(p).title); delete S.pending[id];
+}
 async function approve(id,el){
   const p=S.pending[id]; if(!p) return; const st=el.querySelector('.status:not(.dest)');
   if(repWarn(p)){
@@ -1386,8 +1397,9 @@ async function send(text){
     thinking.remove();
     if(r.reply) addMsg(r.reply,'ai');
     if(r.warning) addRetry(r.warning,text,imgs);
-    (r.proposals||[]).forEach(addProposal);
+    const cards=(r.proposals||[]).map(addProposal).filter(Boolean);
     S.history.push({role:'user',content:text||'(תמונה)'},{role:'assistant',content:r.reply||''}); S.history=S.history.slice(-20); save('history',S.history);
+    if(S.cfg.drive) await driveReview(r,cards,text);
   }catch(err){ thinking.remove(); addMsg('לא הצלחתי לדבר עם השרת: '+err.message,'sys'); }
 }
 
@@ -1487,6 +1499,7 @@ function setupSpeech(){
   rec.onend=()=>{listening=false;$('mic').classList.remove('on');
     if(quietEnd){ quietEnd=false; } else beepOff();
     if(!chatOpen()){ renderHint(); return; }
+    if(S.cfg.drive && $('input').value.trim()){ scheduleAutoSend(); return; }
     if($('input').value.trim())$('hint').textContent='לשלוח? אפשר לתקן קודם.';};
 }
 function toggleMic(){ if(!rec) return; if(listening){rec.stop();return;} rec.lang=S.cfg.voicelang; try{rec.start();}catch(e){} }
@@ -1552,6 +1565,137 @@ async function startRecording(){
     }
   }catch(e){}
   try{ rec.lang=S.cfg.voicelang; rec.start(); }catch(e){}
+}
+
+
+/* ===================== מצב נהיגה ===================== */
+/*
+ * שלושה שלבים ירדו: השליחה, הקריאה והאישור. אחרי שתיקה ההודעה נשלחת לבד,
+ * ההצעה מוקראת ברמקול, והאישור נאמר בקול. הכלל שהעוזר מציע ולא מבצע נשמר —
+ * "כן" הוא אישור מפורש, בדיוק כמו לחיצה.
+ *
+ * זיהוי דיבור באוטו אינו אמין, ולכן כל תשובה שלא הובנה פעמיים אינה מבצעת דבר:
+ * המשפט המקורי נשמר כמטלה לטיפול, וזה נאמר בקול. לאבד בקשה עדיף על לקבוע
+ * ביומן משהו שלא ביקשת.
+ */
+let driveGen=0;                       // כל סגירה של השיחה מבטלת לולאה שרצה
+function driveStop(){ driveGen++; try{ speechSynthesis.cancel(); }catch(e){} }
+
+let heVoice=null;
+function pickVoice(){
+  try{ const all=speechSynthesis.getVoices()||[]; heVoice=all.find(v=>/^he/i.test(v.lang))||null; }catch(e){}
+}
+if(window.speechSynthesis){ pickVoice(); speechSynthesis.addEventListener('voiceschanged',pickVoice); }
+
+function speak(text){
+  return new Promise(res=>{
+    let done=false; const fin=()=>{ if(!done){ done=true; res(); } };
+    try{
+      if(!window.speechSynthesis||!text){ fin(); return; }
+      speechSynthesis.cancel();
+      const u=new SpeechSynthesisUtterance(String(text));
+      u.lang='he-IL'; u.rate=1.05; if(heVoice) u.voice=heVoice;
+      u.onend=fin; u.onerror=fin;
+      speechSynthesis.speak(u);
+      // מנוע הדיבור לא תמיד מדווח שסיים. בלי הגבול הזה הלולאה נתקעת לנצח.
+      setTimeout(fin, Math.min(20000, 2000+String(text).length*95));
+    }catch(e){ fin(); }
+  });
+}
+
+// מופע זיהוי נפרד לשאלה קצרה, כדי לא לדרוך על המאזינים של ההכתבה הרגילה.
+function listenOnce(ms){
+  return new Promise(res=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){ res(''); return; }
+    const r=new SR(); r.lang=S.cfg.voicelang||'he-IL';
+    r.interimResults=false; r.continuous=false; r.maxAlternatives=3;
+    let out='',done=false;
+    const fin=()=>{ if(done) return; done=true; try{ r.abort(); }catch(e){} res(out.trim()); };
+    // אוספים את כל החלופות: "כן" נשמע דומה למילים אחרות, ודי בכך שאחת מהן תתאים.
+    r.onresult=ev=>{ for(const q of ev.results) for(let i=0;i<q.length;i++) out+=' '+q[i].transcript; };
+    r.onerror=fin; r.onend=fin;
+    try{ r.start(); }catch(e){ fin(); return; }
+    setTimeout(fin, ms||6000);
+  });
+}
+
+const DRIVE_YES=['כן','אשר','תאשר','אישור','אשרי','בסדר','אוקיי','אוקי','סבבה','נכון','קבע','תקבע','יאללה'];
+const DRIVE_NO=['לא','בטל','ביטול','תבטל','עזוב','דלג','תמחק','מחק'];
+// המילה האחרונה שנאמרה קובעת: "לא, כן" הוא תיקון, לא סתירה.
+function yesNo(text){
+  const w=String(text||'').split(/[^֐-׿]+/).filter(Boolean);
+  let v=null;
+  for(const x of w){ if(DRIVE_YES.indexOf(x)>=0) v=true; else if(DRIVE_NO.indexOf(x)>=0) v=false; }
+  return v;
+}
+
+// מה שלא הובן נשמר כמטלה עם המשפט המקורי, ומחכה לרגע שבו אפשר להסתכל במסך.
+async function stash(text){
+  const t={id:'t'+Date.now(),title:'לטפל: '+text,tags:[],people:[],shared:false,author:S.cfg.me,
+           importance:'normal',due:ymd(new Date()),mit:false,done:'',synced:demo(),remindAt:'',items:[]};
+  S.tasks.push(t); save('tasks',S.tasks); renderTasks();
+  addLog('נשמר לטיפול מאוחר יותר: '+text,{by:'מצב נהיגה'});
+  if(!demo()){ try{ await api('addTask',t); t.synced=true; }catch(e){ t.synced=false; } save('tasks',S.tasks); }
+}
+
+// המלל למסך אינו מלל להקראה: "17.9" ו-"2026-09-16" נשמעים כמו רצף ספרות.
+// לכן ההקראה נבנית מהשדות עצמם, בשמות ימים וחודשים.
+function spokenCard(p){
+  if(p.type==='event'){
+    const a=new Date(p.start), b=new Date(p.end);
+    return 'פגישה. '+p.title+'. יום '+HE_DAYS[a.getDay()]+', '+a.getDate()+' ב'+HE_MONTHS[a.getMonth()]
+      +', בשעה '+hhmm(a)+' עד '+hhmm(b)
+      +(p.location?', ב'+p.location:'')
+      +(p.repeat&&p.repeat.freq?', חוזר '+(FREQ_HE[p.repeat.freq]||''):'');
+  }
+  if(p.type==='task'){
+    const d=p.due?new Date(p.due):null;
+    return 'מטלה. '+p.title
+      +(d&&!isNaN(d)?'. עד יום '+HE_DAYS[d.getDay()]+', '+d.getDate()+' ב'+HE_MONTHS[d.getMonth()]:'')
+      +(p.remindAt?'. תזכורת ביומן בשעה '+p.remindAt:'')
+      +((p.items||[]).length?'. עם '+p.items.length+' פריטים':'');
+  }
+  if(p.type==='email_draft') return 'טיוטת מייל. '+(p.subject||'ללא נושא');
+  return describe(p).title;
+}
+
+async function driveReview(r,cards,spokenText){
+  const gen=driveGen;
+  const alive=()=>gen===driveGen && chatOpen();
+  if(r.reply) await speak(r.reply);
+  if(!alive()) return;
+  if(!cards.length){ if(!r.warning) await speak('אין מה לאשר.'); return; }
+  for(const el of cards){
+    if(!alive()) return;
+    const id=el.dataset.id, p=S.pending[id];
+    if(!p) continue;
+    await speak(spokenCard(p)+'. לאשר?');
+    if(!alive()) return;
+    let v=yesNo(await listenOnce(6000));
+    if(v===null){
+      await speak('לא הבנתי. לאשר?');
+      if(!alive()) return;
+      v=yesNo(await listenOnce(6000));
+    }
+    if(!alive()) return;
+    if(v===true){ await approve(id,el); await speak('נקבע.'); }
+    else if(v===false){ reject(id,el); await speak('ביטלתי.'); }
+    else { await stash(spokenText||''); await speak('לא הבנתי, שמרתי לטיפול אחר כך.'); return; }
+  }
+  if(alive()) startRecording();
+}
+
+// שליחה מאליה אחרי שתיקה, עם חלון קצר לביטול בנגיעה כלשהי במסך.
+let autoSendT=null;
+function cancelAutoSend(){ if(autoSendT){ clearTimeout(autoSendT); autoSendT=null; renderHint(); } }
+function scheduleAutoSend(){
+  const t=$('input').value.trim(); if(!t) return;
+  cancelAutoSend();
+  $('hint').textContent='שולח בעוד רגע. הקש לביטול.';
+  const stop=()=>{ document.removeEventListener('pointerdown',stop,true); cancelAutoSend(); };
+  document.addEventListener('pointerdown',stop,true);
+  autoSendT=setTimeout(()=>{ autoSendT=null; document.removeEventListener('pointerdown',stop,true); renderHint(); send($('input').value); },2200);
 }
 
 /* ===================== אירועי ממשק ===================== */
@@ -1627,7 +1771,7 @@ $('msgs').addEventListener('click',e=>{
   const el=b.closest('.prop'); const id=el.dataset.id;
   if(b.dataset.act==='edit'){ const ed=el.querySelector('.edit'); if(!ed) return; ed.hidden=!ed.hidden; b.setAttribute('aria-pressed',String(!ed.hidden)); return; }
   if(b.dataset.act==='approve') approve(id,el);
-  else{el.classList.add('done');el.querySelector('.status:not(.dest)').textContent='נדחה';addLog('נדחתה הצעה: '+describe(S.pending[id]).title);delete S.pending[id];}
+  else reject(id,el);
 });
 // ליומן הפעולות אין יותר כפתור ניווט משלו, ולכן המעבר הופרד לפונקציה.
 function showTab(name){
@@ -1695,7 +1839,7 @@ $('digesttest').addEventListener('click',async()=>{
 });
 
 $('save').addEventListener('click',()=>{
-  S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.openMode=$('openmode').value; S.cfg.familyCalendarId=$('famcal').value;
+  S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.openMode=$('openmode').value; S.cfg.drive=$('drive').value==='1'; S.cfg.familyCalendarId=$('famcal').value;
   S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.partnerName=$('pname').value.trim(); S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
   S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
   save('cfg',S.cfg); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
@@ -1800,7 +1944,7 @@ if(new URLSearchParams(location.search).has('rec')){
 setInterval(()=>{renderHeader();renderNow();renderDayRail();},60000);
 // בלי זה מטלה שבן או בת הזוג הוסיפו לא מופיעה עד רענון של הדף
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){ stopMic(); return; }
+  if(document.hidden){ cancelAutoSend(); driveStop(); stopMic(); return; }
   loadAgenda(); loadTasks(); if(logSrc==='server') loadServerLog();
 });
 // הכיתוב נמחק ברגע שמתחברים. קודם הוא נקבע פעם אחת בטעינה ונשאר תקוע גם אחרי חיבור.
