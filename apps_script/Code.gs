@@ -47,6 +47,7 @@ function doPost(e) {
       case 'createCalendar': return json_(createCalendar_(b));
       case 'createEvent':    return json_(createEvent_(b));
       case 'deleteEvent':    return json_(deleteEvent_(b.id, b.calendarId, b.series));
+      case 'remindEvent':    return json_(remindEvent_(b));
       case 'tasks':          return json_({ tasks: listTasks_() });
       case 'addTask':        return json_(addTask_(b));
       case 'updateTask':     return json_(updateTask_(b));
@@ -236,6 +237,21 @@ function applyReminders_(ev, mins) {
   list.map(Number).filter(m => !isNaN(m) && m >= 0 && m <= 40320).slice(0, 5)
       .forEach(m => ev.addPopupReminder(m));
 }
+// תזכורת לאירוע שכבר קיים ביומן. נוגעים רק בתזכורות; כותרת, שעה ומיקום
+// נשארים כפי שהם, כדי שהוספת תזכורת לא תיגע בשום דבר אחר.
+function remindEvent_(b) {
+  const cals = b.calendarId ? [calById_(b.calendarId)] : visibleCalendars_();
+  for (const c of cals) {
+    let ev = null;
+    try { ev = c.getEventById(b.id); } catch (e) {}
+    if (!ev) continue;
+    applyReminders_(ev, Array.isArray(b.reminders) ? b.reminders : [60]);
+    log_('remindEvent', ev.getTitle() + ' · ' + (b.reminders || [60]).join(','), b.id, c.getId());
+    return { ok: true, title: ev.getTitle(), start: ev.getStartTime().toISOString(), calendarId: c.getId() };
+  }
+  throw new Error('האירוע לא נמצא ביומן');
+}
+
 function deleteEvent_(id, calendarId, series) {
   const cals = calendarId ? [calById_(calendarId)] : visibleCalendars_();
   for (const c of cals) {
@@ -511,6 +527,9 @@ function chat_(b) {
     'פרטי או משותף: shared=true כשמדובר בילד, במשפחה, בבית, או כשנאמר במפורש "משותף", "לשנינו", "שבן או בת הזוג יראו". אחרת shared=false והפריט נשאר פרטי ביומן האישי. תמיד אפשר לשנות בכרטיס.',
     'תמונות והודעות מועברות: אם צורפה תמונה (צילום מסך של ווטסאפ, הזמנה, לוח חוגים, מכתב מבית הספר) או הודבק טקסט מועבר — חלץ ממנו את כל האירועים והמטלות, כל אחד כהצעה נפרדת עם תאריך ושעה מדויקים. אם השנה חסרה, הנח את המועד הקרוב הבא. ציין ב־why מאיפה נלקח כל פרט. אם משהו לא ברור בתמונה, שאל במקום לנחש.',
     'אירוע חוזר: כשנאמר "כל שבוע", "כל יום", "כל חודש", "קבוע" או "חוזר", מלא repeat={"freq":"daily|weekly|monthly","until":"YYYY-MM-DD"}. את until ממלאים רק אם נאמר עד מתי במפורש; אחרת until="" ואל תמציא תאריך. באירוע שאינו חוזר repeat=null.',
+    'תזכורות לאירוע חדש: ברירת המחדל היא שעה לפני, ואין צורך לציין זאת. אם נאמרה תזכורת אחרת — "יום לפני", "רבע שעה לפני", "יומיים לפני" — החזר באירוע שדה remind עם מערך דקות, למשל [1440]. אם נאמר "בלי תזכורת" החזר remind ריק.',
+    'תזכורת לאירוע קיים: כשנאמר "תוסיף תזכורת ל..." בלי לקבוע אירוע חדש, מצא ברשימת האירועים שקיבלת את האירוע שהכי מתאים לתיאור — גם אם השם אינו מדויק — והחזר הצעה מסוג reminder עם ה-eventId שלו. ב-why כתוב לאיזה אירוע התכוונת ולמה, כדי שהמשתמש יוכל לאשר שזיהית נכון. אם יותר מאירוע אחד מתאים, החזר הצעה לכל אחד מהם ותן למשתמש לבחור. אם אף אירוע לא מתאים, אל תמציא — אמור זאת ב-reply.',
+    'שיוך למי שמדבר: "לי", "אליי", "שלי", "ביומן שלי" מתכוונים למשתמש עצמו — shared=false, tags ריק, ו-people ריק. שם של ילד מתכוון לילד, עם התג שלו. שם בן או בת הזוג מתכוון להם, ב-people.',
     'תזכורת מול מטלה: אם נאמר "ביומן", "תזכורת ביומן", "תקבע", או שנאמרה שעה ביום — החזר event, לא task. task הוא רק פריט ברשימה, בלי שעה. מטלה נכנסת לרשימת המטלות בלבד ולעולם לא ליומן גוגל, ולכן אסור לתאר task בתשובה כמשהו שנכנס "ליומן".',
     'כשיש התנגשות ביומן ציין זאת ב־why. הפרד בין חשוב לדחוף.',
     '',
@@ -519,7 +538,8 @@ function chat_(b) {
     ' {"type":"event","title":"...","start":"ISO עם אזור זמן","end":"ISO","location":"","tags":["שם ילד"],"shared":false,"repeat":null,"why":"..."},',
     ' {"type":"task","title":"...","tags":[],"shared":false,"importance":"high|normal","due":"YYYY-MM-DD","mit":false,"items":[],"why":"..."},',
     'מטלה עם רשימה: כשהבקשה מכילה כמה דברים לעשות תחת כותרת אחת — קניות, ציוד לטיול, הכנות לאירוע — החזר מטלה אחת עם items, מערך של מחרוזות קצרות, ולא מטלה נפרדת לכל פריט. מטלה רגילה מחזירה items ריק.',
-    ' {"type":"email_draft","to":"","subject":"...","body":"...","why":"..."}',
+    ' {"type":"email_draft","to":"","subject":"...","body":"...","why":"..."},',
+    ' {"type":"reminder","eventId":"המזהה מתוך רשימת האירועים","title":"שם האירוע כפי שהוא ביומן","start":"ISO של האירוע","minutes":[60],"why":"..."}',
     ']}',
     'אם אין פעולה להציע, proposals ריק.',
   ].join('\n');

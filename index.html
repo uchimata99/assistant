@@ -124,9 +124,9 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .task.done .t{text-decoration:line-through;color:var(--ink-2)}
 .task .s{color:var(--ink-2);font-size:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--hat,var(--other));vertical-align:middle;margin-inline-end:4px}
-.tag{display:inline-block;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;background:color-mix(in srgb,var(--tag) 16%,var(--card));color:var(--tag-ink,var(--ink));border:1px solid color-mix(in srgb,var(--tag) 34%,transparent);margin-inline-start:6px;vertical-align:middle}
+.tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;background:color-mix(in srgb,var(--tag) 34%,var(--card));color:var(--tag-ink,var(--ink));border:1px solid color-mix(in srgb,var(--tag) 55%,transparent);margin-inline-start:6px;vertical-align:middle}
 .shared{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--ink-2)}
-.owner{display:inline-block;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;background:var(--field);color:var(--ink-2);border:1px solid var(--line);margin-inline-start:6px}
+.owner{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;background:color-mix(in srgb,var(--accent) 18%,var(--card));color:var(--ink);border:1px solid color-mix(in srgb,var(--accent) 38%,transparent);margin-inline-start:6px}
 .shared svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2}
 .empty{padding:22px 16px;color:var(--ink-2)}
 .empty b{color:var(--ink);display:block;margin-bottom:4px;font-weight:600}
@@ -192,7 +192,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .chat .bar h3{margin:0;font-family:var(--font-head);font-weight:500;font-size:20px}
 .chat .msgs{flex:1;overflow-y:auto;padding:14px 14px 130px;display:flex;flex-direction:column;gap:10px}
 .msg{max-width:88%;padding:10px 14px;border-radius:16px;line-height:1.4;white-space:pre-wrap}
-.msg.me{align-self:flex-start;background:var(--ink);color:var(--on-ink);border-end-start-radius:4px}
+.msg.me{align-self:flex-start;background:var(--accent-soft);color:var(--ink);border:1px solid color-mix(in srgb,var(--accent) 26%,transparent);border-end-start-radius:4px}
 .msg.me img{display:block;max-width:220px;border-radius:10px;margin-top:6px}
 .msg.ai{align-self:flex-end;background:var(--card);border-end-end-radius:4px;box-shadow:0 1px 0 var(--line)}
 .msg.sys{align-self:center;color:var(--ink-2);font-size:14px;background:none;text-align:center}
@@ -206,13 +206,14 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .prop .who4{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center}
 .prop .who4 .lbl{font-size:var(--fs-2);color:var(--ink-2);margin-inline-end:2px}
 .prop .who4 button{padding:8px 12px;border-radius:999px;background:var(--field);font-size:var(--fs-2);color:var(--ink-2);min-height:40px;border:1px solid transparent}
-.prop .who4 button.kid{background:color-mix(in srgb,var(--tag) 14%,var(--card));border-color:color-mix(in srgb,var(--tag) 45%,transparent);color:var(--ink)}
-.prop .who4 button.kid[aria-pressed="true"]{background:color-mix(in srgb,var(--tag) 34%,var(--card));border-color:var(--tag);font-weight:600}
-.prop .who4 button.grown[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+.prop .who4 button.kid{background:color-mix(in srgb,var(--tag) 22%,var(--card));border-color:color-mix(in srgb,var(--tag) 45%,transparent);color:var(--ink)}
+.prop .who4 button.kid[aria-pressed="true"]{background:color-mix(in srgb,var(--tag) 48%,var(--card));border-color:var(--tag);font-weight:600}
+.prop .who4 button.grown{background:color-mix(in srgb,var(--accent) 10%,var(--card));border-color:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--ink)}
+.prop .who4 button.grown[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 30%,var(--card));border-color:var(--accent);font-weight:600}
 .prop.done .who4 button{display:none}
 .prop .vis{display:flex;gap:6px;margin-top:10px}
 .prop .vis button{padding:6px 12px;border-radius:999px;background:var(--paper);font-size:14px;color:var(--ink-2);display:flex;align-items:center;gap:5px}
-.prop .vis button[aria-pressed="true"]{background:var(--ink);color:var(--on-ink)}
+.prop .vis button[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 28%,var(--card));color:var(--ink);font-weight:600}
 .prop .vis svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
 .prop .rep{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;background:var(--field);color:var(--ink-2);border:1px solid var(--line);margin-inline-start:6px;vertical-align:middle}
 .prop .rep svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2}
@@ -239,7 +240,7 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .attach:empty{display:none}
 .attach .th{position:relative;flex:none}
 .attach img{height:64px;border-radius:10px;display:block}
-.attach .rm{position:absolute;top:-6px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--on-ink);font-size:14px;line-height:22px;text-align:center}
+.attach .rm{position:absolute;top:-6px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:14px;line-height:22px;text-align:center}
 .composer .box{display:flex;align-items:flex-end;gap:6px;background:var(--card);border-radius:22px;padding:6px 6px 6px 10px;box-shadow:0 2px 12px rgba(30,35,40,.12)}
 .composer textarea{flex:1;border:0;resize:none;background:none;font:inherit;max-height:120px;padding:9px 0;line-height:1.35;min-width:0}
 .composer textarea::placeholder{color:var(--ink-2)}
@@ -288,7 +289,7 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 .mini{padding:8px 12px;border-radius:8px;background:var(--paper);font-weight:600;font-size:14px;white-space:nowrap}
 .mini.x{color:var(--ink-2);font-size:17px;padding:4px 10px}
 
-.toast{position:fixed;top:14px;inset-inline:14px;background:var(--ink);color:var(--on-ink);padding:12px 16px;border-radius:12px;z-index:60;text-align:center;opacity:0;transform:translateY(-8px);transition:.2s;pointer-events:none}
+.toast{position:fixed;top:14px;inset-inline:14px;background:var(--accent);color:#fff;padding:12px 16px;border-radius:12px;z-index:60;text-align:center;opacity:0;transform:translateY(-8px);transition:.2s;pointer-events:none}
 .toast.show{opacity:1;transform:none}
 .quick{display:flex;gap:8px;flex-wrap:wrap;margin:10px 2px 0}
 .quick button{padding:8px 12px;border-radius:999px;background:var(--card);box-shadow:0 1px 0 var(--line);font-size:14px}
@@ -401,7 +402,7 @@ details[open]>summary{border-bottom:1px solid var(--line)}
           <option value="">בלי תזכורת בכלל</option>
           <option value="10">עשר דקות לפני</option>
           <option value="30">חצי שעה לפני</option>
-          <option value="60">שעה לפני</option>
+          <option value="60" selected>שעה לפני</option>
           <option value="10,60">שעה לפני, ושוב עשר דקות לפני</option>
         </select>
 
@@ -529,7 +530,7 @@ const PROFILES = {
 };
 const DEFAULTS = {
   profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL', openMode:'now', drive:false,
-  remind:'30', digestChannel:'email', digestHour:21, partnerName:'',
+  remind:'60', digestChannel:'email', digestHour:21, partnerName:'',
   familyCalendarId:'',
   // התגים נוספים בהגדרות: שם, כינויים לזיהוי בדיבור ובהודעות, ויומן מהרשימה.
   tags:[],
@@ -1179,6 +1180,19 @@ function addRetry(msg,text,imgs){
 }
 function addMsg(text,who,imgs){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text; (imgs||[]).forEach(src=>{const im=document.createElement('img'); im.src=src; d.appendChild(im);}); $('msgs').appendChild(d); scrollMsgs(); return d; }
 
+// דקות לפני, במילים. חמש דקות ויום שלם הם אותו שדה, וספרות לבדן לא אומרות כלום.
+const REMIND_OPTS=[[0,'ברגע האירוע'],[10,'עשר דקות לפני'],[15,'רבע שעה לפני'],[30,'חצי שעה לפני'],[60,'שעה לפני'],[120,'שעתיים לפני'],[1440,'יום לפני'],[2880,'יומיים לפני']];
+function remindOptions(sel){
+  const cur=(sel&&sel.length)?Number(sel[0]):60;
+  return REMIND_OPTS.map(o=>`<option value="${o[0]}" ${o[0]===cur?'selected':''}>${o[1]}</option>`).join('')
+    +`<option value="-1" ${cur===-1?'selected':''}>בלי תזכורת</option>`;
+}
+function remindWords(mins){
+  const list=(mins||[]).map(Number).filter(m=>!isNaN(m));
+  if(!list.length) return 'בלי תזכורת';
+  return list.map(m=>{ const f=REMIND_OPTS.find(o=>o[0]===m); return f?f[1]:m+' דקות לפני'; }).join(', ');
+}
+
 // עריכה בתוך הכרטיס: כשהשעה שהוצעה לא טובה מתקנים אותה כאן, בלי לנסח מחדש את הבקשה.
 function editForm(p){
   const kindPick=t=>`<label>סוג<select data-e="kind">
@@ -1205,6 +1219,12 @@ function editForm(p){
         </select></label>
         <label>עד תאריך<input type="date" data-e="until" value="${esc(r.until||'')}"></label>
       </div>
+      <label>תזכורת<select data-e="remind">${remindOptions(p.remind)}</select></label>
+    </div>`;
+  }
+  if(p.type==='reminder'){
+    return `<div class="edit" hidden>
+      <label>תזכורת<select data-e="minutes">${remindOptions(p.minutes)}</select></label>
     </div>`;
   }
   if(p.type==='task'){
@@ -1252,9 +1272,6 @@ function convertProposal(el,p,kind){
   delete S.pending[el.dataset.id];
   el.remove();
   addProposal(p);
-  const fresh=[...document.querySelectorAll('.prop')].pop();
-  const ed=fresh&&fresh.querySelector('.edit');
-  if(ed){ ed.hidden=false; fresh.querySelector('.fix').setAttribute('aria-pressed','true'); }
 }
 
 // אחרי כל עריכה מרעננים את מה שמוצג, כדי שהכרטיס לא יבטיח דבר אחד ויבצע אחר.
@@ -1262,7 +1279,7 @@ function refreshProp(el,p){
   const d=describe(p); const h=accentOf(p);
   el.style.setProperty('--hat',h.color);
   const kd=el.querySelector('.kind');
-  if(kd) kd.innerHTML=`<span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)} · ${esc(d.kind)}`;
+  if(kd) kd.innerHTML=`<span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}${h.name?' · ':''}${esc(d.kind)}`;
   const pt=el.querySelector('.pt'); if(pt) pt.innerHTML=esc(d.title)+repChip(p)+tagChips(p.tags);
   const pm=el.querySelector('.pm'); if(pm) pm.textContent=d.meta;
   const w=el.querySelector('.warn'); if(w) w.textContent=repWarn(p);
@@ -1271,8 +1288,13 @@ function refreshProp(el,p){
   updateDest(el,p);
 }
 function describe(p){
-  if(p.type==='event'){const s=new Date(p.start),e=new Date(p.end);return {kind:'פגישה ביומן',title:p.title,meta:`יום ${HE_DAYS[s.getDay()]} ${s.getDate()}.${s.getMonth()+1} · ${hhmm(s)}–${hhmm(e)}${p.location?' · '+p.location:''}`};}
+  if(p.type==='event'){const s=new Date(p.start),e=new Date(p.end);return {kind:'פגישה ביומן',title:p.title,meta:`יום ${HE_DAYS[s.getDay()]} ${s.getDate()}.${s.getMonth()+1} · ${hhmm(s)}–${hhmm(e)}${p.location?' · '+p.location:''} · ${remindWords(Array.isArray(p.remind)?p.remind:reminderList())}`};}
   if(p.type==='task') return {kind:'מטלה',title:p.title,meta:(p.importance==='high'?'חשוב · ':'')+(p.mit?'מהותית להיום · ':'')+(p.due?'עד '+p.due:'')+(p.remindAt?' · תזכורת ביומן ב־'+p.remindAt:'')+((p.items||[]).length?' · '+p.items.length+' פריטים':'')};
+  if(p.type==='reminder'){
+    const d=p.start?new Date(p.start):null;
+    return {kind:'תזכורת לאירוע קיים',title:p.title||'אירוע',
+      meta:(d&&!isNaN(d)?`יום ${HE_DAYS[d.getDay()]} ${d.getDate()}.${d.getMonth()+1} · ${hhmm(d)} · `:'')+remindWords(p.minutes)};
+  }
   if(p.type==='email_draft') return {kind:'טיוטת מייל (לא נשלחת)',title:p.subject||'ללא נושא',meta:(p.to?'אל: '+p.to+'\n':'')+(p.body||'')};
   return {kind:p.type,title:JSON.stringify(p),meta:''};
 }
@@ -1296,7 +1318,7 @@ function addProposal(p){
   const h=accentOf(p); const d=describe(p);
   const el=document.createElement('div'); el.className='prop'; el.style.setProperty('--hat',h.color); el.dataset.id=id;
   const canShare=p.type!=='email_draft';
-  el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)} · ${esc(d.kind)}</div>
+  el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}${h.name?' · ':''}${esc(d.kind)}</div>
     <div class="pt">${esc(d.title)}${repChip(p)}${tagChips(p.tags)}</div><div class="pm">${esc(d.meta)}</div>
     ${p.why?`<div class="why">${esc(p.why)}</div>`:''}
     <div class="who4">
@@ -1306,12 +1328,11 @@ function addProposal(p){
     </div>
     ${canShare?`<div class="vis"><button data-vis="0" aria-pressed="${!p.shared}">${LOCK_ICON}פרטי</button><button data-vis="1" aria-pressed="${p.shared}">${SHARE_ICON}משותף</button><span class="status dest"></span></div>`:''}
     <div class="warn">${esc(repWarn(p))}</div>
-    ${editForm(p)}
-    <div class="acts"><button class="yes" data-act="approve">${T().approve}</button><button class="fix" data-act="edit" aria-pressed="false">ערוך</button><button class="no" data-act="reject">לא עכשיו</button></div>
+    ${editForm(p).replace(' hidden>','>')}
+    <div class="acts"><button class="yes" data-act="approve">${T().approve}</button><button class="no" data-act="reject">לא עכשיו</button></div>
     <div class="status"></div>`;
   $('msgs').appendChild(el); updateDest(el,p);
   // חזרתי בלי "עד מתי" — פותחים את העריכה מיד, כי בלי זה אי אפשר לאשר.
-  if(repWarn(p)){ const ed=el.querySelector('.edit'); if(ed){ ed.hidden=false; el.querySelector('.fix').setAttribute('aria-pressed','true'); } }
   scrollMsgs();
   return el;
 }
@@ -1324,12 +1345,7 @@ function reject(id,el){
 }
 async function approve(id,el){
   const p=S.pending[id]; if(!p) return; const st=el.querySelector('.status:not(.dest)');
-  if(repWarn(p)){
-    st.textContent=repWarn(p);
-    const ed=el.querySelector('.edit'); if(ed){ ed.hidden=false; el.querySelector('.fix').setAttribute('aria-pressed','true'); }
-    const u=el.querySelector('[data-e="until"]'); if(u) u.focus();
-    return;
-  }
+  if(repWarn(p)){ st.textContent=repWarn(p); const u=el.querySelector('[data-e="until"]'); if(u) u.focus(); return; }
   st.textContent='מבצע...';
   try{
     if(p.type==='event'){
@@ -1338,8 +1354,10 @@ async function approve(id,el){
       const dest=p.shared?targetCal(p):{id:'',name:'היומן האישי שלך'};
       const forWho=(p.people||[]).length?'אחראי: '+p.people.join(', ')+String.fromCharCode(10):'';
       const rep=(p.repeat&&p.repeat.freq&&p.repeat.until)?p.repeat:null;
-      const r=await api('createEvent',{title,start:p.start,end:p.end,location:p.location||'',description:forWho+'נוצר על ידי העוזר של '+S.cfg.me,calendarId:dest.id,reminders:reminderList(),repeat:rep});
-      addLog('נקבע ב'+dest.name+': '+title+' ('+describe(p).meta+(rep?' · חוזר '+(FREQ_HE[rep.freq]||'')+' עד '+shortDate(rep.until):'')+')',{by:'באישורך',undoable:true,eventId:r.id,calendarId:dest.id,series:!!r.series});
+      // ברירת מחדל קבועה: שעה לפני. מה שנאמר בבקשה גובר עליה.
+      const mins=Array.isArray(p.remind)?p.remind:reminderList();
+      const r=await api('createEvent',{title,start:p.start,end:p.end,location:p.location||'',description:forWho+'נוצר על ידי העוזר של '+S.cfg.me,calendarId:dest.id,reminders:mins,repeat:rep});
+      addLog('נקבע ב'+dest.name+': '+title+' ('+describe(p).meta+' · '+remindWords(mins)+(rep?' · חוזר '+(FREQ_HE[rep.freq]||'')+' עד '+shortDate(rep.until):'')+')',{by:'באישורך',undoable:true,eventId:r.id,calendarId:dest.id,series:!!r.series});
       await loadAgenda();
     } else if(p.type==='task'){
       const t={id:'t'+Date.now(),title:p.title,tags:p.tags||[],people:p.people||[],shared:!!p.shared,author:S.cfg.me,importance:p.importance||'normal',due:p.due||ymd(new Date()),mit:!!p.mit,done:'',synced:demo(),remindAt:p.remindAt||'',items:(p.items||[]).map(x=>({t:x.t,d:!!x.d}))};
@@ -1370,6 +1388,10 @@ async function approve(id,el){
         }
         save('tasks',S.tasks); renderTasks();
       }
+    } else if(p.type==='reminder'){
+      const r=await api('remindEvent',{id:p.eventId,calendarId:p.calendarId||'',reminders:(p.minutes&&p.minutes.length)?p.minutes:[60]});
+      addLog('נוספה תזכורת ל'+(r.title||p.title||'אירוע')+': '+remindWords(p.minutes),{by:'באישורך'});
+      await loadAgenda();
     } else if(p.type==='email_draft'){
       await api('createDraft',{to:p.to||'',subject:p.subject||'',body:p.body||''});
       addLog('נשמרה טיוטת מייל: '+(p.subject||'ללא נושא')+' — ממתינה לשליחה שלך',{by:'באישורך'});
@@ -1391,7 +1413,7 @@ async function send(text){
       tags:S.cfg.tags.map(t=>({name:t.name,aliases:t.aliases,age:ageOf(t.dob),grade:gradeOf(t.dob)||null,hasCalendar:!!t.calendarId})),
       hasFamilyCalendar:!!S.cfg.familyCalendarId, mitmax:S.cfg.mitmax,
       tasks:S.tasks.filter(t=>!t.done).map(t=>({title:t.title,tags:(t.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!t.shared,author:t.author,importance:t.importance,due:t.due,mit:!!t.mit})),
-      events:S.events.filter(e=>{const d=new Date(e.start);return d>new Date(now.getTime()-2*3600e3)&&d<new Date(now.getTime()+8*86400e3);}).map(e=>({title:e.title,start:e.start,end:e.end,location:e.location,tags:(e.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!e.shared})),
+      events:S.events.filter(e=>{const d=new Date(e.start);return d>new Date(now.getTime()-2*3600e3)&&d<new Date(now.getTime()+8*86400e3);}).map(e=>({id:e.id,calendarId:e.calendarId,calendarName:e.calendarName,title:e.title,start:e.start,end:e.end,location:e.location,tags:(e.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!e.shared})),
     };
     const r=await api('chat',{message:text,images:imgs.map(i=>i.data),history:S.history.slice(-10),context:ctx});
     thinking.remove();
@@ -1531,6 +1553,7 @@ const beepSent=()=>tone([[784,0.07],[1175,0.13]]); // ההודעה יצאה
 document.addEventListener('pointerdown',function unlock(){
   document.removeEventListener('pointerdown',unlock,true);
   try{ const AC=window.AudioContext||window.webkitAudioContext; if(AC){ actx=actx||new AC(); actx.resume(); } }catch(e){}
+  syncDriveButton();
 },true);
 // כניסה ישירה להקלטה, מקיצור בטלפון. פותחת את השיחה ומדליקה את המיקרופון.
 // כפתור הכיבוי עצמו אינו מגיע לדף — אין דרך לדפדפן לשמוע אותו — ולכן הקיצור
@@ -1647,7 +1670,8 @@ function spokenCard(p){
     return 'פגישה. '+p.title+'. יום '+HE_DAYS[a.getDay()]+', '+a.getDate()+' ב'+HE_MONTHS[a.getMonth()]
       +', בשעה '+hhmm(a)+' עד '+hhmm(b)
       +(p.location?', ב'+p.location:'')
-      +(p.repeat&&p.repeat.freq?', חוזר '+(FREQ_HE[p.repeat.freq]||''):'');
+      +(p.repeat&&p.repeat.freq?', חוזר '+(FREQ_HE[p.repeat.freq]||''):'')
+      +'. '+remindWords(Array.isArray(p.remind)?p.remind:reminderList());
   }
   if(p.type==='task'){
     const d=p.due?new Date(p.due):null;
@@ -1655,6 +1679,12 @@ function spokenCard(p){
       +(d&&!isNaN(d)?'. עד יום '+HE_DAYS[d.getDay()]+', '+d.getDate()+' ב'+HE_MONTHS[d.getMonth()]:'')
       +(p.remindAt?'. תזכורת ביומן בשעה '+p.remindAt:'')
       +((p.items||[]).length?'. עם '+p.items.length+' פריטים':'');
+  }
+  if(p.type==='reminder'){
+    const d=p.start?new Date(p.start):null;
+    return 'תזכורת לאירוע קיים. '+(p.title||'')
+      +(d&&!isNaN(d)?'. יום '+HE_DAYS[d.getDay()]+', '+d.getDate()+' ב'+HE_MONTHS[d.getMonth()]+', בשעה '+hhmm(d):'')
+      +'. '+remindWords(p.minutes);
   }
   if(p.type==='email_draft') return 'טיוטת מייל. '+(p.subject||'ללא נושא');
   return describe(p).title;
@@ -1698,6 +1728,41 @@ function scheduleAutoSend(){
   autoSendT=setTimeout(()=>{ autoSendT=null; document.removeEventListener('pointerdown',stop,true); renderHint(); send($('input').value); },2200);
 }
 
+/* ---------- כפתור ההגה ---------- */
+/*
+ * דפדפן אינו שומע כפתורי חומרה, חוץ מכפתורי המדיה: לחיצה על ההגה או על
+ * האוזניות מגיעה כאל נגן. לכן האפליקציה מתחזה לנגן — מנגנת שקט בלולאה כדי
+ * להחזיק את מוקד המדיה — ומתרגמת לחיצה לפתיחת הקלטה.
+ *
+ * המחיר: כל עוד המצב דלוק, כפתור ההגה שייך לעוזר ולא לספוטיפיי. לכן הוא
+ * נדלק רק יחד עם מצב נהיגה, ונכבה כשיוצאים ממנו.
+ */
+let mediaHook=null;
+// קובץ שמע זעיר ושקט. שנייה אחת של דממה בפורמט wav, מוטבעת ולא נטענת מרשת.
+const SILENCE='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=';
+async function driveButtonOn(){
+  if(mediaHook||!('mediaSession' in navigator)) return;
+  try{
+    const a=new Audio(SILENCE); a.loop=true; a.volume=0.001;
+    await a.play();
+    navigator.mediaSession.metadata=new MediaMetadata({title:'העוזר',artist:'לחיצה מתחילה הקלטה'});
+    navigator.mediaSession.playbackState='playing';
+    const go=()=>{ if(listening){ stopMic(); } else { showTab('now'); startRecording(); } };
+    ['play','pause','previoustrack','nexttrack'].forEach(k=>{ try{ navigator.mediaSession.setActionHandler(k,go); }catch(e){} });
+    mediaHook={audio:a};
+  }catch(e){ /* בלי מגע קודם הדפדפן לא מרשה ניגון. יופעל בנגיעה הבאה. */ }
+}
+function driveButtonOff(){
+  if(!mediaHook) return;
+  try{ mediaHook.audio.pause(); }catch(e){}
+  if('mediaSession' in navigator){
+    ['play','pause','previoustrack','nexttrack'].forEach(k=>{ try{ navigator.mediaSession.setActionHandler(k,null); }catch(e){} });
+    navigator.mediaSession.playbackState='none';
+  }
+  mediaHook=null;
+}
+function syncDriveButton(){ if(S.cfg.drive) driveButtonOn(); else driveButtonOff(); }
+
 /* ===================== אירועי ממשק ===================== */
 function autosize(){const t=$('input');t.style.height='auto';t.style.height=Math.min(t.scrollHeight,120)+'px';}
 $('input').addEventListener('input',()=>{autosize();$('send').disabled=!$('input').value.trim()&&!S.images.length;});
@@ -1714,6 +1779,11 @@ $('msgs').addEventListener('input',e=>{
   const val=k=>{ const x=el.querySelector('[data-e="'+k+'"]'); return x?x.value:''; };
   const k=f.dataset.e;
   if(k==='kind'){ convertProposal(el,p,f.value); return; }
+  if(k==='remind'||k==='minutes'){
+    const v=Number(f.value);
+    p[k]= v<0 ? [] : [v];
+    refreshProp(el,p); return;
+  }
   if(k==='items'){
     const was={}; (p.items||[]).forEach(x=>{ was[x.t]=x.d; });
     p.items=f.value.split(String.fromCharCode(10)).map(x=>x.trim()).filter(Boolean).map(x=>({t:x,d:!!was[x]}));
@@ -1769,7 +1839,6 @@ $('msgs').addEventListener('click',e=>{
   if(v){const el=v.closest('.prop');const p=S.pending[el.dataset.id];if(!p)return;p.shared=v.dataset.vis==='1';el.querySelectorAll('button[data-vis]').forEach(x=>x.setAttribute('aria-pressed',x===v));updateDest(el,p);return;}
   const b=e.target.closest('button[data-act]'); if(!b) return;
   const el=b.closest('.prop'); const id=el.dataset.id;
-  if(b.dataset.act==='edit'){ const ed=el.querySelector('.edit'); if(!ed) return; ed.hidden=!ed.hidden; b.setAttribute('aria-pressed',String(!ed.hidden)); return; }
   if(b.dataset.act==='approve') approve(id,el);
   else reject(id,el);
 });
@@ -1842,7 +1911,7 @@ $('save').addEventListener('click',()=>{
   S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.openMode=$('openmode').value; S.cfg.drive=$('drive').value==='1'; S.cfg.familyCalendarId=$('famcal').value;
   S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.partnerName=$('pname').value.trim(); S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
   S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
-  save('cfg',S.cfg); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
+  save('cfg',S.cfg); syncDriveButton(); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
 });
 $('tags').addEventListener('click',async e=>{
   const b=e.target.closest('button'); if(!b) return;
