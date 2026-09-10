@@ -362,32 +362,24 @@ function createDraft_(b) { GmailApp.createDraft(b.to || '', b.subject || '', b.b
  * הקישור בין מטלה למשימת גוגל נשמר בגיליון הפרטי של כל חשבון, ולכן הוא
  * לעולם לא מתנגש בין שניכם.
  */
-const GT_BASE = 'https://tasks.googleapis.com/tasks/v1';
+// שירות מתקדם ולא קריאות REST ידניות: רק דרך dependencies אפס סקריפט יודע
+// שהפרויקט משתמש במשימות, ורק אז הוא מבקש את ההרשאה בהרצה הבאה. עם טוקן ידני
+// הבקשה נראתה לו כמו כל קריאת רשת, ולכן לא הופיע מסך אישור והקריאה חזרה 403.
 const GT_LIST_NAME = 'העוזר';
-
-function gt_(method, path, payload) {
-  const res = UrlFetchApp.fetch(GT_BASE + path, {
-    method: method,
-    contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-    payload: payload ? JSON.stringify(payload) : undefined,
-    muteHttpExceptions: true,
-  });
-  const code = res.getResponseCode();
-  const text = res.getContentText();
-  if (code === 404) return null;
-  if (code >= 300) throw new Error('משימות גוגל ' + code + ': ' + text.slice(0, 200));
-  return text ? JSON.parse(text) : {};
-}
 
 function gtListId_() {
   const saved = PROPS.getProperty('GTASKS_LIST_ID');
-  if (saved) { const still = gt_('get', '/users/@me/lists/' + saved); if (still) return saved; }
-  const lists = gt_('get', '/users/@me/lists') || {};
+  if (saved) { try { if (Tasks.Tasklists.get(saved)) return saved; } catch (e) {} }
+  const lists = Tasks.Tasklists.list() || {};
   const found = (lists.items || []).filter(function (l) { return l.title === GT_LIST_NAME; })[0];
-  const id = found ? found.id : gt_('post', '/users/@me/lists', { title: GT_LIST_NAME }).id;
+  const id = found ? found.id : Tasks.Tasklists.insert({ title: GT_LIST_NAME }).id;
   PROPS.setProperty('GTASKS_LIST_ID', id);
   return id;
+}
+
+// הרצה ידנית מהעורך, כדי להוציא את מסך האישור על ההרשאה החדשה.
+function authorizeTasks() {
+  Logger.log('רשימת המשימות: ' + gtListId_());
 }
 
 // מיפוי: מזהה המטלה שלנו, מפתח הפריט (ריק = המטלה עצמה), מזהה משימת גוגל.
@@ -419,7 +411,7 @@ function syncGoogleTasks_() {
   const byId = {};
   ours.forEach(function (t) { byId[String(t.id)] = t; });
 
-  const remote = gt_('get', '/lists/' + listId + '/tasks?showCompleted=true&showHidden=true&maxResults=100') || {};
+  const remote = Tasks.Tasks.list(listId, { showCompleted: true, showHidden: true, maxResults: 100 }) || {};
   const gById = {};
   (remote.items || []).forEach(function (g) { gById[g.id] = g; });
 
@@ -432,7 +424,7 @@ function syncGoogleTasks_() {
     const parts = key.split('|');
     const t = byId[parts[0]];
     const g = gById[map[key].g];
-    if (!t) { if (g) gt_('delete', '/lists/' + listId + '/tasks/' + g.id); drops.push(map[key].row); return; }
+    if (!t) { if (g) { try { Tasks.Tasks.remove(listId, g.id); } catch (e) {} } drops.push(map[key].row); return; }
     if (!g) { drops.push(map[key].row); return; }
     const doneThere = g.status === 'completed';
     if (parts[1] === '') {
@@ -450,14 +442,14 @@ function syncGoogleTasks_() {
     const key = String(t.id) + '|';
     let parentId = map[key] && gById[map[key].g] ? map[key].g : null;
     if (!parentId) {
-      const g = gt_('post', '/lists/' + listId + '/tasks', { title: t.title, due: gtDue_(t.due), notes: t.shared ? 'משותף' : '' });
+      const g = Tasks.Tasks.insert({ title: t.title, due: gtDue_(t.due), notes: t.shared ? 'משותף' : '' }, listId);
       parentId = g.id; adds.push([t.id, '', g.id]); pushed++;
     }
     (t.items || []).forEach(function (item, i) {
       const ik = String(t.id) + '|' + i;
       if (map[ik] && gById[map[ik].g]) return;
-      const g = gt_('post', '/lists/' + listId + '/tasks?parent=' + encodeURIComponent(parentId), { title: item.t });
-      if (item.d) gt_('patch', '/lists/' + listId + '/tasks/' + g.id, { status: 'completed' });
+      const g = Tasks.Tasks.insert({ title: item.t }, listId, { parent: parentId });
+      if (item.d) Tasks.Tasks.patch({ status: 'completed' }, listId, g.id);
       adds.push([t.id, String(i), g.id]); pushed++;
     });
   });
@@ -467,12 +459,12 @@ function syncGoogleTasks_() {
     const key = String(t.id) + '|';
     const m = map[key]; if (!m) return;
     const g = gById[m.g]; if (!g) return;
-    if (t.done && g.status !== 'completed') gt_('patch', '/lists/' + listId + '/tasks/' + g.id, { status: 'completed' });
+    if (t.done && g.status !== 'completed') Tasks.Tasks.patch({ status: 'completed' }, listId, g.id);
     (t.items || []).forEach(function (item, i) {
       const mi = map[String(t.id) + '|' + i]; if (!mi) return;
       const gi = gById[mi.g]; if (!gi) return;
-      if (item.d && gi.status !== 'completed') gt_('patch', '/lists/' + listId + '/tasks/' + gi.id, { status: 'completed' });
-      if (!item.d && gi.status === 'completed') gt_('patch', '/lists/' + listId + '/tasks/' + gi.id, { status: 'needsAction' });
+      if (item.d && gi.status !== 'completed') Tasks.Tasks.patch({ status: 'completed' }, listId, gi.id);
+      if (!item.d && gi.status === 'completed') Tasks.Tasks.patch({ status: 'needsAction' }, listId, gi.id);
     });
   });
 
