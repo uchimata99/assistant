@@ -390,10 +390,21 @@ function gtMapTab_() {
   if (!sh) { sh = ss.insertSheet('קישור למשימות גוגל'); sh.appendRow(GT_MAP_HEADER); }
   return sh;
 }
-function gtMapRead_() {
+// מחזיר גם כפילויות: שורות ישנות שאותו מפתח קיבל בגללן משימה שנייה בגוגל.
+// הן נוצרו בבאג של אינדקס 0, וגם בלעדיו עדיף לנקות אותן ולא לצבור יתומות.
+function gtMapRead_(dupOut) {
   const vals = gtMapTab_().getDataRange().getValues();
   const map = {};
-  for (let i = 1; i < vals.length; i++) if (vals[i][0]) map[String(vals[i][0]) + '|' + String(vals[i][1] || '')] = { g: String(vals[i][2]), row: i + 1 };
+  // הפריט הראשון ברשימה הוא אינדקס 0, ו-0 הוא ערך כוזב. `x || ''` הפך אותו למחרוזת
+  // ריקה, כלומר למפתח של המטלה עצמה, וכך הפריט הראשון נוצר מחדש בכל סנכרון.
+  for (let i = 1; i < vals.length; i++) {
+    if (!vals[i][0]) continue;
+    const it = vals[i][1];
+    const key = (it === '' || it === null || it === undefined) ? '' : String(it);
+    const full = String(vals[i][0]) + '|' + key;
+    if (map[full] && dupOut) dupOut.push(map[full]);
+    map[full] = { g: String(vals[i][2]), row: i + 1 };
+  }
   return map;
 }
 
@@ -406,7 +417,8 @@ function gtDue_(due) {
 function syncGoogleTasks_() {
   const listId = gtListId_();
   const sh = gtMapTab_();
-  const map = gtMapRead_();
+  const dups = [];
+  const map = gtMapRead_(dups);
   const ours = listTasks_();
   const byId = {};
   ours.forEach(function (t) { byId[String(t.id)] = t; });
@@ -417,6 +429,7 @@ function syncGoogleTasks_() {
 
   const adds = [];      // שורות מיפוי חדשות
   const drops = [];     // שורות מיפוי למחיקה, מהסוף להתחלה
+  dups.forEach(function (d) { try { Tasks.Tasks.remove(listId, d.g); } catch (e) {} drops.push(d.row); });
   let pulled = 0, pushed = 0;
 
   // משיכה: מה שסומן כבוצע בטלפון, בתוך משימות גוגל, נסגר גם אצלנו.
