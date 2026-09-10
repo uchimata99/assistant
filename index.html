@@ -434,13 +434,6 @@ details[open]>summary{border-bottom:1px solid var(--line)}
           <option value="0">כבוי</option>
           <option value="1">דלוק — שליחה, הקראה ואישור בקול</option>
         </select>
-        <label for="wheel">כפתור ההגה או האוזניות</label>
-        <select id="wheel">
-          <option value="0">לא בשימוש</option>
-          <option value="1">לחיצה מתחילה הקלטה</option>
-        </select>
-        <div class="note">כדי לתפוס את הכפתור האפליקציה נרשמת כנגן, ולכן בזמן שהיא פתוחה המוזיקה עלולה להיעצר, והכפתור לא ידלג שיר.</div>
-
         <label for="openmode">כשהאפליקציה נפתחת</label>
         <select id="openmode">
           <option value="now">מסך היום</option>
@@ -536,7 +529,7 @@ const PROFILES = {
   f: { me:'', gender:'f' },
 };
 const DEFAULTS = {
-  profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL', openMode:'now', drive:false, wheel:false,
+  profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL', openMode:'now', drive:false,
   remind:'60', digestChannel:'email', digestHour:21, partnerName:'',
   familyCalendarId:'',
   // התגים נוספים בהגדרות: שם, כינויים לזיהוי בדיבור ובהודעות, ויומן מהרשימה.
@@ -1110,7 +1103,7 @@ function readTagsFromForm(){
 }
 function renderSettings(){
   renderInstall();
-  $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang; $('openmode').value=S.cfg.openMode||'now'; $('drive').value=S.cfg.drive?'1':'0'; $('wheel').value=S.cfg.wheel?'1':'0';
+  $('me').value=S.cfg.me; $('gender').value=S.cfg.gender; $('url').value=S.cfg.url; $('mitmax').value=S.cfg.mitmax; $('voicelang').value=S.cfg.voicelang; $('openmode').value=S.cfg.openMode||'now'; $('drive').value=S.cfg.drive?'1':'0';
   $('secret').value=S.cfg.secret||''; $('remind').value=S.cfg.remind||''; $('pname').value=S.cfg.partnerName||'';
   $('digesth').innerHTML=Array.from({length:24},(_,h)=>`<option value="${h}" ${h===+S.cfg.digestHour?'selected':''}>${pad(h)}:00</option>`).join('');
   $('digestch').value=S.cfg.digestChannel||'email';
@@ -1571,7 +1564,6 @@ const beepSent=()=>tone([[784,0.07],[1175,0.13]]); // ההודעה יצאה
 document.addEventListener('pointerdown',function unlock(){
   document.removeEventListener('pointerdown',unlock,true);
   try{ const AC=window.AudioContext||window.webkitAudioContext; if(AC){ actx=actx||new AC(); actx.resume(); } }catch(e){}
-  syncDriveButton();
 },true);
 // כניסה ישירה להקלטה, מקיצור בטלפון. פותחת את השיחה ומדליקה את המיקרופון.
 // כפתור הכיבוי עצמו אינו מגיע לדף — אין דרך לדפדפן לשמוע אותו — ולכן הקיצור
@@ -1746,42 +1738,6 @@ function scheduleAutoSend(){
   autoSendT=setTimeout(()=>{ autoSendT=null; document.removeEventListener('pointerdown',stop,true); renderHint(); send($('input').value); },2200);
 }
 
-/* ---------- כפתור ההגה ---------- */
-/*
- * דפדפן אינו שומע כפתורי חומרה, חוץ מכפתורי המדיה: לחיצה על ההגה או על
- * האוזניות מגיעה כאל נגן. לכן האפליקציה מתחזה לנגן — מנגנת שקט בלולאה כדי
- * להחזיק את מוקד המדיה — ומתרגמת לחיצה לפתיחת הקלטה.
- *
- * המחיר: כל עוד המצב דלוק, כפתור ההגה שייך לעוזר ולא לספוטיפיי. לכן הוא
- * נדלק רק כשמבקשים אותו במפורש בהגדרות, בנפרד ממצב נהיגה, כי הוא לוקח
- * לעצמו את שליטת המדיה כל עוד האפליקציה פתוחה.
- */
-let mediaHook=null;
-// קובץ שמע זעיר ושקט. שנייה אחת של דממה בפורמט wav, מוטבעת ולא נטענת מרשת.
-const SILENCE='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=';
-async function driveButtonOn(){
-  if(mediaHook||!('mediaSession' in navigator)) return;
-  try{
-    const a=new Audio(SILENCE); a.loop=true; a.volume=0.001;
-    await a.play();
-    navigator.mediaSession.metadata=new MediaMetadata({title:'העוזר',artist:'לחיצה מתחילה הקלטה'});
-    navigator.mediaSession.playbackState='playing';
-    const go=()=>{ if(listening){ stopMic(); } else { showTab('now'); startRecording(); } };
-    ['play','pause','previoustrack','nexttrack'].forEach(k=>{ try{ navigator.mediaSession.setActionHandler(k,go); }catch(e){} });
-    mediaHook={audio:a};
-  }catch(e){ /* בלי מגע קודם הדפדפן לא מרשה ניגון. יופעל בנגיעה הבאה. */ }
-}
-function driveButtonOff(){
-  if(!mediaHook) return;
-  try{ mediaHook.audio.pause(); }catch(e){}
-  if('mediaSession' in navigator){
-    ['play','pause','previoustrack','nexttrack'].forEach(k=>{ try{ navigator.mediaSession.setActionHandler(k,null); }catch(e){} });
-    navigator.mediaSession.playbackState='none';
-  }
-  mediaHook=null;
-}
-function syncDriveButton(){ if(S.cfg.wheel) driveButtonOn(); else driveButtonOff(); }
-
 /* ===================== אירועי ממשק ===================== */
 function autosize(){const t=$('input');t.style.height='auto';t.style.height=Math.min(t.scrollHeight,120)+'px';}
 $('input').addEventListener('input',()=>{autosize();$('send').disabled=!$('input').value.trim()&&!S.images.length;});
@@ -1927,10 +1883,10 @@ $('digesttest').addEventListener('click',async()=>{
 });
 
 $('save').addEventListener('click',()=>{
-  S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.openMode=$('openmode').value; S.cfg.drive=$('drive').value==='1'; S.cfg.wheel=$('wheel').value==='1'; S.cfg.familyCalendarId=$('famcal').value;
+  S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.openMode=$('openmode').value; S.cfg.drive=$('drive').value==='1'; S.cfg.familyCalendarId=$('famcal').value;
   S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.partnerName=$('pname').value.trim(); S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
   S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
-  save('cfg',S.cfg); syncDriveButton(); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
+  save('cfg',S.cfg); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
 });
 $('tags').addEventListener('click',async e=>{
   const b=e.target.closest('button'); if(!b) return;
