@@ -195,7 +195,8 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .msg.me{align-self:flex-start;background:var(--ink);color:var(--on-ink);border-end-start-radius:4px}
 .msg.me img{display:block;max-width:220px;border-radius:10px;margin-top:6px}
 .msg.ai{align-self:flex-end;background:var(--card);border-end-end-radius:4px;box-shadow:0 1px 0 var(--line)}
-.msg.sys{align-self:center;color:var(--ink-2);font-size:14px;background:none}
+.msg.sys{align-self:center;color:var(--ink-2);font-size:14px;background:none;text-align:center}
+.msg.sys .again{display:block;margin:8px auto 0;padding:8px 16px;border-radius:999px;background:var(--field);color:var(--ink);font-weight:600;font-size:14px;min-height:40px}
 
 .prop{align-self:flex-end;width:92%;background:var(--card);border-radius:var(--r-card);box-shadow:0 1px 0 var(--line);border-inline-start:5px solid var(--hat,var(--other));padding:12px 14px}
 .prop .kind{color:var(--ink-2);font-size:14px}
@@ -1162,6 +1163,15 @@ function stopMic(){ disarmTap(); if(rec&&listening){ try{ rec.stop(); }catch(e){
 // שהשיחה סגורה ומנקה את השורה במקום לכתוב בה "לשלוח?".
 function closeChat(){ $('chat').classList.remove('open'); $('chat').setAttribute('aria-hidden','true'); stopMic(); }
 function scrollMsgs(){ const m=$('msgs'); requestAnimationFrame(()=>m.scrollTop=m.scrollHeight); }
+// הודעת תקלה עם כפתור: בלי זה צריך להקליד מחדש את כל הבקשה, וזה בדיוק הרגע
+// שבו המשתמש מוותר.
+function addRetry(msg,text,imgs){
+  const d=addMsg(msg,'sys');
+  const b=document.createElement('button');
+  b.className='again'; b.textContent='שלח שוב';
+  b.addEventListener('click',()=>{ b.disabled=true; S.images=(imgs||[]).slice(); send(text); },{once:true});
+  d.appendChild(b); scrollMsgs(); return d;
+}
 function addMsg(text,who,imgs){ const d=document.createElement('div'); d.className='msg '+who; d.textContent=text; (imgs||[]).forEach(src=>{const im=document.createElement('img'); im.src=src; d.appendChild(im);}); $('msgs').appendChild(d); scrollMsgs(); return d; }
 
 // עריכה בתוך הכרטיס: כשהשעה שהוצעה לא טובה מתקנים אותה כאן, בלי לנסח מחדש את הבקשה.
@@ -1375,7 +1385,7 @@ async function send(text){
     const r=await api('chat',{message:text,images:imgs.map(i=>i.data),history:S.history.slice(-10),context:ctx});
     thinking.remove();
     if(r.reply) addMsg(r.reply,'ai');
-    if(r.warning) addMsg(r.warning,'sys');
+    if(r.warning) addRetry(r.warning,text,imgs);
     (r.proposals||[]).forEach(addProposal);
     S.history.push({role:'user',content:text||'(תמונה)'},{role:'assistant',content:r.reply||''}); S.history=S.history.slice(-20); save('history',S.history);
   }catch(err){ thinking.remove(); addMsg('לא הצלחתי לדבר עם השרת: '+err.message,'sys'); }
@@ -1943,9 +1953,19 @@ window.LIVE_NOTES_CONFIG = {
 })();
 </script>
 <style>
-/* שורת ההודעה מקובעת לתחתית המסך, ולכן הכפתור מורם מעליה. */
-.ln-fab{bottom:calc(84px + env(safe-area-inset-bottom))}
-.ln-panel{bottom:calc(148px + env(safe-area-inset-bottom))}
+/* שורת ההודעה מקובעת לתחתית המסך, ולכן הכפתור מורם מעליה. הגובה נמדד בפועל
+   ולא מנוחש: הוא משתנה עם הטלפון, עם המקלדת ועם שורת הרמז. */
+.ln-fab{bottom:var(--ln-lift,96px);width:46px;height:46px;font-size:20px}
+.ln-panel{bottom:calc(var(--ln-lift,96px) + 58px)}
 </style>
+<script>
+(function(){
+  const c=document.querySelector('.composer'); if(!c) return;
+  const lift=()=>{ document.documentElement.style.setProperty('--ln-lift',(c.offsetHeight+14)+'px'); };
+  lift();
+  if(window.ResizeObserver) new ResizeObserver(lift).observe(c);
+  addEventListener('resize',lift);
+})();
+</script>
 </body>
 </html>

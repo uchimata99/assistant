@@ -541,8 +541,11 @@ function chat_(b) {
   const text = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
   const truncated = data.stop_reason === 'max_tokens';
   const out = parseReply_(text);
-  // כשהפענוח נכשל ההצעות נעלמו קודם בשקט. עכשיו אומרים את זה במפורש.
-  if (out.parseFailed) {
+  // תשובה ריקה אינה "טקסט שלא הצלחתי לקרוא" — היא כלום. אמירה מדויקת חוסכת
+  // למשתמש לחפש טקסט שאינו קיים, ומכוונת אותו פשוט לשלוח שוב.
+  if (!text) {
+    out.warning = 'המנוע החזיר תשובה ריקה (' + (data.stop_reason || 'בלי סיבה') + '). שלחו שוב.';
+  } else if (out.parseFailed) {
     out.warning = truncated
       ? 'התשובה נחתכה באמצע ולכן לא הצלחתי לקרוא ממנה הצעות. נסו לפצל — למשל תמונה אחת בכל פעם.'
       : 'קיבלתי תשובה שלא הצלחתי לקרוא כהצעות. הטקסט למטה, אבל אין ממנו כרטיסים לאישור.';
