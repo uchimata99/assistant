@@ -1,6 +1,6 @@
 // שני תפקידים: יעד שיתוף מווטסאפ ומהגלריה, ומטמון שמאפשר לאפליקציה לעלות בלי רשת.
 // בלי המטמון כרום לא מציע להתקין את האפליקציה למסך הבית — "עובד גם לא מקוון" הוא תנאי התקנה.
-const CACHE = 'assist-v2';
+const CACHE = 'assist-v3';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.svg',
                 './icon-192.png', './icon-512.png', './apple-touch-icon.png', './404.html'];
 

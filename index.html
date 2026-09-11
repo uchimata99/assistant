@@ -434,6 +434,7 @@ details[open]>summary{border-bottom:1px solid var(--line)}
           <option value="0">כבוי</option>
           <option value="1">דלוק — שליחה, הקראה ואישור בקול</option>
         </select>
+        <div class="note">אפשר להדליק אותו לנסיעה אחת בלי לשנות כאן: לפתוח שיחה ולומר "אני בנהיגה". "סיימתי לנהוג" מכבה, וגם סגירת האפליקציה.</div>
         <label for="openmode">כשהאפליקציה נפתחת</label>
         <select id="openmode">
           <option value="now">מסך היום</option>
@@ -1158,7 +1159,7 @@ async function retrySync(){
 }
 
 /* ===================== שיחה והצעות ===================== */
-function openChat(){ $('drivetag').hidden=!S.cfg.drive; $('chat').classList.add('open'); $('chat').setAttribute('aria-hidden','false'); scrollMsgs(); }
+function openChat(){ $('drivetag').hidden=!driveOn(); $('chat').classList.add('open'); $('chat').setAttribute('aria-hidden','false'); scrollMsgs(); }
 // יציאה מהשיחה מכבה את המיקרופון תמיד. מיקרופון שממשיך לרוץ מאחורי מסך סגור
 // הוא הפתעה, ולא פיצ'ר. stop ולא abort, כדי שמה שכבר הוכתב יישאר בשורת ההודעה.
 // שורת הרמז יושבת בשורת ההודעה המקובעת, ולכן היא נראית גם במסך הבית.
@@ -1413,6 +1414,11 @@ async function approve(id,el){
 
 async function send(text){
   text=(text||'').trim(); const imgs=S.images.slice(); if(!text&&!imgs.length) return;
+  // גם בהקלדה. רק משפט שכולו הפקודה מדליק או מכבה; פקודה שנבלעה בתוך בקשה
+  // ארוכה נשלחת כרגיל, כדי ש"הגעתי" באמצע משפט לא יכבה את המצב בלי שביקשו.
+  const dcmd=driveCmd(text);
+  if(dcmd&&dcmd.only&&!imgs.length){ openChat(); $('input').value=''; autosize(); $('send').disabled=true; setDrive(dcmd.on); return; }
+  if(dcmd&&dcmd.on&&!dcmd.only){ driveSession=true; text=dcmd.rest||text; }
   openChat(); abortMic(); beepSent();
   addMsg(text||(imgs.length?'(תמונה)':''),'me',imgs.map(i=>i.src)); $('input').value=''; S.images=[]; renderAttach(); autosize(); $('send').disabled=true;
   const thinking=addMsg('…','sys');
@@ -1432,7 +1438,7 @@ async function send(text){
     if(r.warning) addRetry(r.warning,text,imgs);
     const cards=(r.proposals||[]).map(addProposal).filter(Boolean);
     S.history.push({role:'user',content:text||'(תמונה)'},{role:'assistant',content:r.reply||''}); S.history=S.history.slice(-20); save('history',S.history);
-    if(S.cfg.drive) await driveReview(r,cards,text);
+    if(driveOn()) await driveReview(r,cards,text);
   }catch(err){ thinking.remove(); addMsg('לא הצלחתי לדבר עם השרת: '+err.message,'sys'); }
 }
 
@@ -1532,7 +1538,18 @@ function setupSpeech(){
   rec.onend=()=>{listening=false;$('mic').classList.remove('on');
     if(quietEnd){ quietEnd=false; } else beepOff();
     if(!chatOpen()){ renderHint(); return; }
-    if(S.cfg.drive && $('input').value.trim()){ scheduleAutoSend(); return; }
+    const cmd=driveCmd($('input').value);
+    // פקודת נהיגה שנאמרה לבדה אינה נשלחת לשרת: היא מדליקה או מכבה, ופותחת
+    // את המיקרופון שוב לבקשה עצמה. כך כל הנסיעה מתחילה בלי נגיעה במסך.
+    if(cmd&&cmd.only){
+      $('input').value=''; autosize(); $('send').disabled=true;
+      setDrive(cmd.on).then(()=>{ if(cmd.on&&chatOpen()&&!listening) toggleMic(); });
+      return;
+    }
+    // הדלקה שנאמרה יחד עם בקשה: מדליקים וממשיכים עם הבקשה. בכיוון הכיבוי לא,
+    // כי "הגעתי" היא מילה שכיחה, וכיבוי בטעות משאיר את הנהג בלי הידיים החופשיות.
+    if(cmd&&cmd.on){ driveSession=true; $('drivetag').hidden=false; if(cmd.rest){ $('input').value=cmd.rest; autosize(); } }
+    if(driveOn() && $('input').value.trim()){ scheduleAutoSend(); return; }
     if($('input').value.trim())$('hint').textContent='לשלוח? אפשר לתקן קודם.';};
 }
 function toggleMic(){ if(!rec) return; if(listening){rec.stop();return;} rec.lang=S.cfg.voicelang; try{rec.start();}catch(e){} }
@@ -1613,6 +1630,31 @@ async function startRecording(){
  */
 let driveGen=0;                       // כל סגירה של השיחה מבטלת לולאה שרצה
 function driveStop(){ driveGen++; try{ speechSynthesis.cancel(); }catch(e){} }
+
+// הדלקה בקול, בלי לגעת בהגדרות: פותחים את השיחה, אומרים "אני בנהיגה", והמצב
+// נדלק עד סוף הפעלת האפליקציה או עד שאומרים שסיימו. ההגדרה נשארת המתג הקבוע,
+// וזה המתג לנסיעה אחת. הזיהוי נעשה כאן ולא במנוע, כדי שיעבוד מיד ובלי רשת.
+let driveSession=false;
+const driveOn=()=>S.cfg.drive||driveSession;
+const DRIVE_ON_RE=/(אני\s+(בנהיגה|נוהגת?|נוסעת?|באוטו|במכונית|ברכב))|(מצב\s+נהיגה)|(התחלתי\s+לנהוג)/;
+const DRIVE_OFF_RE=/(סיימתי\s+(לנהוג|לנסוע|את\s+הנסיעה))|(הגעתי)|((תכבה|כבה|צא|תצא)\s+(את\s+)?(מ)?מצב\s+נהיגה)|(אני\s+לא\s+(נוהגת?|בנהיגה))/;
+// הכיבוי נבדק ראשון: "סיימתי לנהוג" מכיל גם את מילת ההדלקה.
+// only = המשפט כולו היה הפקודה, ואין בו בקשה נוספת לשלוח למנוע.
+function driveCmd(text){
+  const t=String(text||'').trim(); if(!t) return null;
+  const off=DRIVE_OFF_RE.test(t), on=!off&&DRIVE_ON_RE.test(t);
+  if(!on&&!off) return null;
+  const rest=t.replace(off?DRIVE_OFF_RE:DRIVE_ON_RE,' ').replace(/[.,!?־–—\s]+/g,' ').trim();
+  return {on:on,only:rest.length<3,rest:rest};
+}
+function setDrive(on){
+  driveSession=on;
+  $('drivetag').hidden=!driveOn();
+  addMsg(on?'מצב נהיגה דלוק. אשלח לבד אחרי שתיקה, אקריא את ההצעה, ואחכה ל"כן" או "לא".'
+           :'מצב נהיגה כבוי. חזרה לשליחה ולאישור במסך.','sys');
+  if(!on) cancelAutoSend();
+  return speak(on?'מצב נהיגה דלוק.':'מצב נהיגה כבוי.');
+}
 
 let heVoice=null;
 function pickVoice(){
@@ -2032,8 +2074,14 @@ window.LIVE_NOTES_CONFIG = {
  *  הוסיפו הערות על כל עמוד, סמנו עם עט, ושלחו אותן כ-GitHub Issue
  *  שסוכן Claude Code יעבד. עצמאי לחלוטין, בלי תלות ובלי שלב בנייה.
  *
+ *  שימוש:
+ *    <script>window.LIVE_NOTES_CONFIG={repo:'owner/name'}<\/script>
+ *    <script src="https://uchimata99.github.io/live-notes/live-notes.js"><\/script>
+ *    (הלוכסן שלפני script בשתי השורות האלה נוסף כאן: תגית סוגרת בתוך הערה
+ *     סוגרת את הסקריפט בדף עצמו, וזו תקלה שקטה שמפילה את כל הבלוק.)
+ *
  *  הווידג'ט רדום כברירת מחדל. כדי להפעיל אותו במכשיר שלך, היכנסו פעם אחת
- *  לכתובת עם ?notes=1 (הדגל נשמר). לכיבוי: ?notes=0.
+ *  לכתובת עם ?notes=1 (הדגל נשמר). לכיבוי: ?notes=0. כך משתמשי הקצה לא רואים אותו.
  */
 (function(){
   var C = Object.assign({
@@ -2044,7 +2092,12 @@ window.LIVE_NOTES_CONFIG = {
     accent:'#c08bff',
     always:false,            /* true = להציג תמיד (בלי דגל) */
     storeKey:null,           /* ברירת מחדל: 'livenotes_'+repo */
-    locationFn:function(){ return location.hash ? decodeURIComponent(location.hash.slice(1)) : (document.title||location.pathname); }
+    locationFn:function(){
+      var base = location.hash ? decodeURIComponent(location.hash.slice(1)) : (document.title||location.pathname);
+      var t = document.querySelector('.tabs .tab.active, .tab.active, [role="tab"][aria-selected="true"]');
+      var tab = (t && t.textContent) ? t.textContent.replace(/\s+/g,' ').trim() : '';
+      return tab ? base + ' › ' + tab : base;
+    }
   }, window.LIVE_NOTES_CONFIG||{});
 
   /* הפעלה מותנית — שלא יוצג למשתמשי קצה */
@@ -2062,7 +2115,7 @@ window.LIVE_NOTES_CONFIG = {
   var SIDE = C.dir==='rtl'?'left':'right';
 
   var css=
-  '.ln-fab{position:fixed;bottom:18px;'+SIDE+':18px;z-index:2147483000;width:54px;height:54px;border-radius:50%;border:none;cursor:pointer;background:'+C.accent+';color:#15111e;font-size:24px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center}'+
+  '.ln-fab{position:fixed;bottom:16px;'+SIDE+':16px;z-index:2147483000;width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;background:'+C.accent+';color:#15111e;font-size:20px;box-shadow:0 6px 18px rgba(0,0,0,.32);display:flex;align-items:center;justify-content:center}'+
   '.ln-badge{position:absolute;top:-4px;'+SIDE+':-4px;background:#ff7a8a;color:#fff;font:600 12px sans-serif;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px}'+
   '.ln-panel{position:fixed;bottom:84px;'+SIDE+':18px;z-index:2147483000;width:min(360px,calc(100vw - 36px));max-height:74vh;overflow:auto;background:#1b1430;color:#f5eff9;border:1px solid rgba(228,205,240,.18);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.55);padding:14px;font-family:system-ui,Heebo,sans-serif;direction:'+C.dir+'}'+
   '.ln-hidden{display:none!important}'+
@@ -2078,64 +2131,168 @@ window.LIVE_NOTES_CONFIG = {
   '.ln-il{font-size:11px;color:#9b8fb0;margin-bottom:4px;word-break:break-word}.ln-it{font-size:14px;white-space:pre-wrap;word-break:break-word}'+
   '.ln-ia{display:flex;gap:12px;margin-top:6px}.ln-ia button{background:none;border:none;color:#9b8fb0;font-size:12px;cursor:pointer;padding:0}'+
   '.ln-empty{color:#9b8fb0;font-size:13px;text-align:center;padding:10px}'+
+  '.ln-mark{display:block;margin-top:6px;max-width:100%;border-radius:8px;border:1px solid rgba(228,205,240,.18);background:#fff;cursor:zoom-in}'+
+  '.ln-toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483002;background:#1b1430;color:#fff;padding:8px 15px;border-radius:999px;font:600 13px system-ui,Heebo,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.45)}'+
+  '.ln-pending{background:rgba(255,90,138,.12);border:1px solid rgba(255,90,138,.4);color:#ffd0db;border-radius:9px;padding:7px 9px;font-size:12.5px;margin-bottom:8px}'+
+  '.ln-link{background:none;border:none;color:#ff9ab0;cursor:pointer;font:inherit;text-decoration:underline;padding:0}'+
   '.ln-hint{font-size:12px;color:#9b8fb0;margin-top:10px;line-height:1.55}'+
   '.ln-pen-wrap{position:fixed;inset:0;z-index:2147482000}.ln-pen{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}'+
   '.ln-pen-bar{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483001;display:flex;gap:8px;background:#1b1430;border:1px solid rgba(228,205,240,.2);border-radius:999px;padding:6px 10px}';
   var st=document.createElement('style'); st.textContent=css; (document.head||document.documentElement).appendChild(st);
 
+  var extTrigger=null;
   function el(tag,cls,html){ var e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; }
   var fab=el('button','ln-fab',null); fab.title=C.title; fab.innerHTML='📝<span class="ln-badge ln-hidden"></span>';
   var panel=el('div','ln-panel ln-hidden',null);
   var penWrap=el('div','ln-pen-wrap ln-hidden',null);
   var canvas=el('canvas','ln-pen',null); penWrap.appendChild(canvas);
   var penBar=el('div','ln-pen-bar ln-hidden','<button class="ln-btn ln-gho" data-a="penClear">נקה</button><button class="ln-btn ln-pri" data-a="penOff">סיום סימון</button>');
-  function mount(){ document.body.appendChild(fab); document.body.appendChild(panel); document.body.appendChild(penWrap); document.body.appendChild(penBar); badge(); }
+  var toast=el('div','ln-toast ln-hidden',null);
+  function showToast(t){ toast.textContent=t; toast.classList.remove('ln-hidden'); }
+  function hideToast(){ toast.classList.add('ln-hidden'); }
+  /* טריגר חיצוני: כפתור בתוך הדף (ליד ההמבורגר) — נוסף על הכפתור הצף,
+     שנשאר גלוי תמיד כך שגם בגלילה אפשר להגיע אליו (לא "נבלע") */
+  function wireTrigger(){
+    extTrigger = document.querySelector('[data-ln-trigger]');
+    if(extTrigger){
+      extTrigger.addEventListener('click',function(ev){ ev.preventDefault(); panel.classList.contains('ln-hidden')?open():close(); });
+    }
+  }
+  function mount(){ document.body.appendChild(fab); document.body.appendChild(panel); document.body.appendChild(penWrap); document.body.appendChild(penBar); document.body.appendChild(toast); wireTrigger(); badge(); }
+
+  /* ----- צילום מסך (html2canvas, נטען לפי דרישה) ----- */
+  var capturing=false;
+  function loadH2C(){ return new Promise(function(res,rej){
+    if(window.html2canvas) return res(window.html2canvas);
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload=function(){ res(window.html2canvas); };
+    s.onerror=function(){ rej(new Error('html2canvas load failed')); };
+    (document.head||document.documentElement).appendChild(s);
+  }); }
+  /* מצלם את אזור התצוגה הנוכחי. keepPen=true משאיר את סימון העט בתמונה. מסתיר את ממשק הווידג'ט מהצילום. */
+  function captureScreen(opts){
+    opts=opts||{};
+    if(capturing) return Promise.resolve(null);
+    capturing=true; showToast('📷 מצלם מסך…');
+    var fabHidden=fab.classList.contains('ln-hidden');
+    fab.classList.add('ln-hidden'); panel.classList.add('ln-hidden'); penBar.classList.add('ln-hidden');
+    if(extTrigger) extTrigger.style.visibility='hidden';
+    function restore(){ if(!fabHidden)fab.classList.remove('ln-hidden'); if(extTrigger)extTrigger.style.visibility=''; hideToast(); capturing=false; }
+    return loadH2C().then(function(h2c){
+      var sc=Math.min(1, 1000/Math.max(innerWidth,1));
+      return h2c(document.body,{ backgroundColor:'#ffffff', scale:sc, useCORS:true, logging:false,
+        x:window.scrollX, y:window.scrollY, width:innerWidth, height:innerHeight,
+        ignoreElements:function(node){ return node===panel||node===fab||node===penBar||node===toast||node===extTrigger||(!opts.keepPen&&node===penWrap); } });
+    }).then(function(cv){ restore(); try{ return cv.toDataURL('image/jpeg',0.72); }catch(e){ return null; } })
+      .catch(function(){ restore(); return null; });
+  }
+  function dl(href,name){ var a=document.createElement('a'); a.href=href; a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){a.remove();},0); }
 
   /* ----- עט ----- */
-  var ctx,drawing=false;
+  var ctx,drawing=false,hasDrawn=false,pendingMark=null;
   function sizeCanvas(){ canvas.width=innerWidth; canvas.height=innerHeight; ctx=canvas.getContext('2d'); ctx.strokeStyle='#ff5a8a'; ctx.lineWidth=3.5; ctx.lineCap='round'; ctx.lineJoin='round'; }
-  function penOn(){ sizeCanvas(); penWrap.classList.remove('ln-hidden'); penBar.classList.remove('ln-hidden'); panel.classList.add('ln-hidden'); }
-  function penOff(){ penWrap.classList.add('ln-hidden'); penBar.classList.add('ln-hidden'); }
-  function penClear(){ if(ctx)ctx.clearRect(0,0,canvas.width,canvas.height); }
+  function penOn(){ sizeCanvas(); hasDrawn=false; pendingMark=null; canvas.style.pointerEvents='auto'; penWrap.classList.remove('ln-hidden'); penBar.classList.remove('ln-hidden'); panel.classList.add('ln-hidden'); }
+  /* סיום סימון: מצלם את המסך עם הסימון, שומר כתמונה תלויה ופותח הערה לשיוך */
+  function penOff(){
+    penBar.classList.add('ln-hidden');
+    if(!hasDrawn){ penWrap.classList.add('ln-hidden'); return; }
+    canvas.style.pointerEvents='none';
+    captureScreen({keepPen:true}).then(function(img){
+      try{ pendingMark = img || canvas.toDataURL('image/jpeg',0.72); }catch(e){ pendingMark=null; }
+      penClear(); penWrap.classList.add('ln-hidden'); open();
+    });
+  }
+  function doShot(){ if(capturing)return; captureScreen().then(function(img){ if(img)pendingMark=img; else alert('לא הצלחתי לצלם מסך כאן. נסו שוב, או צלמו צילום מסך מהמכשיר.'); open(); }); }
+  function penClear(){ if(ctx)ctx.clearRect(0,0,canvas.width,canvas.height); hasDrawn=false; }
+  function penDiscard(){ penClear(); pendingMark=null; penWrap.classList.add('ln-hidden'); }
   canvas.addEventListener('pointerdown',function(e){ drawing=true; ctx.beginPath(); ctx.moveTo(e.clientX,e.clientY); e.preventDefault(); });
-  canvas.addEventListener('pointermove',function(e){ if(!drawing)return; ctx.lineTo(e.clientX,e.clientY); ctx.stroke(); });
+  canvas.addEventListener('pointermove',function(e){ if(!drawing)return; ctx.lineTo(e.clientX,e.clientY); ctx.stroke(); hasDrawn=true; });
   window.addEventListener('pointerup',function(){ drawing=false; });
 
   /* ----- הערות ----- */
-  function badge(){ var b=fab.querySelector('.ln-badge'); if(notes.length){ b.classList.remove('ln-hidden'); b.textContent=notes.length; } else b.classList.add('ln-hidden'); }
-  function exportText(){ var t='הערות — '+C.repo+'\n========================\n\n'; notes.forEach(function(n){ t+='['+(n.loc||'')+']\n• '+n.text+'\n\n'; }); return t; }
+  function badge(){
+    var b=fab.querySelector('.ln-badge');
+    if(notes.length){ b.classList.remove('ln-hidden'); b.textContent=notes.length; } else b.classList.add('ln-hidden');
+    if(extTrigger){ extTrigger.setAttribute('data-ln-count', notes.length||''); }
+  }
+  function exportText(){ var t='הערות — '+C.repo+'\n========================\n\n'; var k=0; notes.forEach(function(n){ var line='['+(n.loc||'')+']\n• '+n.text; if(n.markUrl){ line+='\n  📷 צילום מסך: '+n.markUrl; } else if(n.mark){ k++; line+='\n  📷 (צילום מצורף — גררו לכאן את הקובץ note-'+k+'.jpg)'; } t+=line+'\n\n'; }); return t; }
   function render(){
     var items = notes.length ? notes.map(function(n){
-      return '<div class="ln-item"><div class="ln-il">'+esc(n.loc)+'</div><div class="ln-it">'+esc(n.text)+'</div>'+
-        '<div class="ln-ia"><button data-a="edit" data-id="'+n.id+'">✎ ערוך</button><button data-a="del" data-id="'+n.id+'">🗑️ מחק</button></div></div>';
+      return '<div class="ln-item"><div class="ln-il">'+esc(n.loc)+(n.mark?' · 📷 צילום מצורף':'')+'</div><div class="ln-it">'+esc(n.text)+'</div>'+
+        (n.mark?'<img class="ln-mark" src="'+n.mark+'" alt="צילום מסך" data-a="zoom" data-id="'+n.id+'">':'')+
+        '<div class="ln-ia"><button data-a="edit" data-id="'+n.id+'">✎ ערוך</button>'+(n.mark?'<button data-a="save" data-id="'+n.id+'">⬇️ שמור תמונה</button>':'')+'<button data-a="del" data-id="'+n.id+'">🗑️ מחק</button></div></div>';
     }).join('') : '<div class="ln-empty">אין עדיין הערות. כתבו הערה ולחצו «הוסף».</div>';
     var send = notes.length ? '<div class="ln-row"><button class="ln-btn ln-pri" data-a="send">📤 שלח</button><button class="ln-btn ln-gho" data-a="copy">העתק</button><button class="ln-btn ln-gho" data-a="clear">מחק הכול</button></div>' : '';
     panel.innerHTML =
       '<div class="ln-h"><b>'+esc(C.title)+'</b><button class="ln-x" data-a="close">✕</button></div>'+
       '<div class="ln-loc">מיקום: '+esc(C.locationFn())+'</div>'+
-      '<textarea class="ln-ta" id="ln-input" placeholder="מה לתקן כאן?"></textarea>'+
-      '<div class="ln-row"><button class="ln-btn ln-pri" data-a="add">＋ הוסף הערה</button><button class="ln-btn ln-gho" data-a="pen">🖊️ עט</button></div>'+
+      (pendingMark?'<div class="ln-pending">📷 צילום המסך מוכן — כתבו הערה והוא ישויך אליה. <button data-a="penDiscard" class="ln-link">בטל צילום</button></div>':'')+
+      '<textarea class="ln-ta" id="ln-input" placeholder="'+(pendingMark?'הסבירו על מה שצילמתם…':'מה לתקן כאן?')+'"></textarea>'+
+      '<div class="ln-row"><button class="ln-btn ln-pri" data-a="add">＋ הוסף הערה</button><button class="ln-btn ln-gho" data-a="pen">🖊️ עט + צילום</button><button class="ln-btn ln-gho" data-a="shot">📷 צלם מסך</button></div>'+
       '<div class="ln-list">'+items+'</div>'+send+
-      '<div class="ln-hint">«שלח» פותח Issue ב-GitHub עם כל ההערות — לחיצת Submit אחת. לסימון: «עט» ← סמנו ← צלמו מסך ושלחו את התמונה.</div>';
+      '<div class="ln-hint">«עט + צילום» = סמנו על המסך ולחצו «סיום סימון». «צלם מסך» = צילום של המסך הנוכחי. «שלח» פותח Issue — אם אתם מחוברים, הצילומים עולים אוטומטית; אחרת יורדים למכשיר לגרירה. ההערות נמחקות מהמכשיר אחרי השליחה.</div>';
     badge();
   }
   function open(){ render(); panel.classList.remove('ln-hidden'); }
   function close(){ panel.classList.add('ln-hidden'); }
-  function addNote(){ var ta=panel.querySelector('#ln-input'); var v=(ta&&ta.value||'').trim(); if(!v)return; notes.push({id:uid(),loc:C.locationFn(),text:v,ts:Date.now()}); persist(); render(); }
+  function addNote(){ var ta=panel.querySelector('#ln-input'); var v=(ta&&ta.value||'').trim(); if(!v)return;
+    var n={id:uid(),loc:C.locationFn(),text:v,ts:Date.now()};
+    if(pendingMark){ n.mark=pendingMark; pendingMark=null; penClear(); penWrap.classList.add('ln-hidden'); }
+    notes.push(n); persist(); render(); }
   function editNote(id){ var n=notes.filter(function(x){return x.id===id;})[0]; if(!n)return; var v=prompt('עריכת הערה:',n.text); if(v==null)return; n.text=v.trim(); persist(); render(); }
   function delNote(id){ notes=notes.filter(function(x){return x.id!==id;}); persist(); render(); }
   function clearAll(){ if(confirm('למחוק את כל ההערות?')){ notes=[]; persist(); render(); } }
   function copyAll(){ var t=exportText(); if(navigator.clipboard)navigator.clipboard.writeText(t).catch(function(){}); alert('ההערות הועתקו.'); }
+  function saveImg(id){ var n=notes.filter(function(x){return x.id===id;})[0]; if(n&&n.mark)dl(n.mark,'note-'+id+'.jpg'); }
+  function zoomImg(id){ var n=notes.filter(function(x){return x.id===id;})[0]; if(n&&n.mark){ var w=window.open('','_blank'); if(w)w.document.write('<img src="'+n.mark+'" style="max-width:100%">'); } }
   function send(){
     if(!notes.length){ alert('אין הערות לשליחה.'); return; }
     var title='הערות — '+new Date().toLocaleDateString(C.lang==='he'?'he-IL':undefined);
-    var url='https://github.com/'+C.repo+'/issues/new?labels='+encodeURIComponent(C.label)+'&title='+encodeURIComponent(title)+'&body='+encodeURIComponent(exportText());
-    window.open(url,'_blank','noopener');
+    var pend=notes.filter(function(n){return n.mark&&!n.markUrl;});
+    /* פותחים חלון ריק בתוך מחוות הלחיצה כדי שלא ייחסם אחרי await של ההעלאה */
+    var win=null; try{ win=window.open('about:blank','_blank'); }catch(e){}
+    function finish(){
+      var body=exportText();
+      var base='https://github.com/'+C.repo+'/issues/new?labels='+encodeURIComponent(C.label)+'&title='+encodeURIComponent(title);
+      var url=base+'&body='+encodeURIComponent(body);
+      var go=function(u){ if(win){ try{ win.location=u; }catch(e){ window.open(u,'_blank','noopener'); } } else { window.open(u,'_blank','noopener'); } };
+      /* GitHub דוחה כתובת Issue ארוכה מדי (שגיאה). אם הגוף ארוך — מעתיקים ללוח
+         ופותחים Issue ריק להדבקה (Ctrl+V), במקום שגיאה. */
+      if(url.length>6000){
+        if(navigator.clipboard){ try{ navigator.clipboard.writeText(body); }catch(e){} }
+        go(base);
+        setTimeout(function(){ alert('היו הרבה הערות — הן הועתקו ללוח. הדביקו (Ctrl+V / הדבק) בגוף ה-Issue ולחצו Submit.'); }, 400);
+      } else {
+        go(url);
+      }
+      /* רק צילומים שלא עלו אוטומטית — מורידים למכשיר לגרירה ידנית */
+      var failed=notes.filter(function(n){return n.mark&&!n.markUrl;});
+      failed.forEach(function(n,i){ dl(n.mark,'note-'+(i+1)+'.jpg'); });
+      var nf=failed.length;
+      notes=[]; persist(); render();
+      if(nf) setTimeout(function(){ alert(nf+' צילומים לא עלו אוטומטית (אולי לא מחוברים) — הורדו למכשיר; גררו אותם ל-Issue.'); }, 250);
+    }
+    if(C.uploadImage && pend.length){
+      showToast('☁️ מעלה צילומים…');
+      Promise.all(pend.map(function(n,i){
+        return Promise.resolve().then(function(){ return C.uploadImage(n.mark,'note-'+Date.now()+'-'+i+'.jpg'); })
+          .then(function(res){ if(res&&res.url){ n.markUrl=res.url; n.markId=res.id; } })
+          .catch(function(){});
+      })).then(function(){ hideToast(); finish(); }, function(){ hideToast(); finish(); });
+    } else { finish(); }
   }
   fab.addEventListener('click',function(){ panel.classList.contains('ln-hidden')?open():close(); });
   panel.addEventListener('click',function(e){ var b=e.target.closest('[data-a]'); if(!b)return; var a=b.getAttribute('data-a'),id=b.getAttribute('data-id');
-    ({add:addNote,close:close,pen:penOn,edit:function(){editNote(id);},del:function(){delNote(id);},clear:clearAll,copy:copyAll,send:send}[a]||function(){})(); });
+    ({add:addNote,close:close,pen:penOn,shot:doShot,penDiscard:function(){penDiscard();render();},edit:function(){editNote(id);},del:function(){delNote(id);},save:function(){saveImg(id);},zoom:function(){zoomImg(id);},clear:clearAll,copy:copyAll,send:send}[a]||function(){})(); });
   penBar.addEventListener('click',function(e){ var b=e.target.closest('[data-a]'); if(!b)return; ({penClear:penClear,penOff:penOff}[b.getAttribute('data-a')]||function(){})(); });
+
+  /* ממשק חיצוני — כדי שכפתור בדף (ליד ההמבורגר) יוכל לפתוח/לסגור */
+  window.LiveNotes = {
+    open:open, close:close,
+    toggle:function(){ panel.classList.contains('ln-hidden')?open():close(); },
+    pen:penOn, shot:doShot, count:function(){ return notes.length; }
+  };
 
   if(document.body) mount(); else document.addEventListener('DOMContentLoaded',mount);
 })();

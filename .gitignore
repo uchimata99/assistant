@@ -12,3 +12,6 @@ Thumbs.db
 apps_script/.clasp.json
 
 apps_script/.clasp-*.json
+
+# תצורת הרצה מקומית לבדיקות, לא חלק מהאפליקציה
+.claude/
