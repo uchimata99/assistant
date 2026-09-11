@@ -287,6 +287,8 @@ details[open]>summary{border-bottom:1px solid var(--line)}
 .tagrow .dob span{font-size:var(--fs-2);color:var(--ink-2)}
 .calrow .acts button[data-armed="1"]{background:var(--err);color:var(--on-ink)}
 .calrow .primary{grid-column:1/-1;color:var(--ink-2);font-size:var(--fs-1)}
+.calrow .shows{grid-column:1/-1;display:flex;align-items:center;gap:9px;color:var(--ink-2);font-size:var(--fs-2);min-height:44px}
+.calrow .shows input{width:22px;height:22px;flex:none;accent-color:var(--accent)}
 .tagrow .calrow{grid-column:1/-1;display:flex;gap:6px;align-items:center}
 .tagrow .calrow select{flex:1}
 .sw{width:22px;height:22px;border-radius:6px;padding:0;border:0}
@@ -548,7 +550,7 @@ const PROFILES = {
 const DEFAULTS = {
   profile:'', me:'', gender:'m', url:'', secret:'', mitmax:3, voicelang:'he-IL', openMode:'now', drive:false,
   remind:'60', digestChannel:'email', digestHour:21, partnerName:'',
-  familyCalendarId:'',
+  familyCalendarId:'', hiddenCals:[],
   // התגים נוספים בהגדרות: שם, כינויים לזיהוי בדיבור ובהודעות, ויומן מהרשימה.
   tags:[],
   calendars:[],
@@ -745,6 +747,10 @@ function hatVars(color){ return '--hat:'+safeOn(color,SURF_LIGHT)+';--hat-d:'+sa
 // יום אחד מכיל אירועים של כולם, ולכן שיוך הקשר ליום לא תיאר את המציאות.
 // גוגל נותן ליומן הראשי את כתובת המייל כשם. במסך זה רעש, ולכן מוצג שם המשתמש.
 // רק בתצוגה: היומן עצמו בגוגל אינו נוגע בזה.
+// בחירה של המכשיר הזה בלבד: אילו יומנים מוצגים כאן. היומנים עצמם בגוגל
+// אינם נוגעים, ובן או בת הזוג ממשיכים לראות את שלהם.
+function calShown(id){ return !(S.cfg.hiddenCals||[]).includes(String(id||'')); }
+function shownEvents(){ return S.events.filter(e=>calShown(e.calendarId)); }
 function calName(c){ return (c&&c.primary) ? (S.cfg.me||'היומן שלי') : ((c&&c.name)||''); }
 function accentOf(x){
   // קודם כול הצבע של היומן שהאירוע יושב בו — זה מה שרואים ביומן גוגל עצמו.
@@ -885,7 +891,7 @@ function fmtDur(m){
 }
 function renderNow(){
   const now=new Date();
-  const todays=S.events.filter(e=>ymd(new Date(e.start))===ymd(now)).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const todays=shownEvents().filter(e=>ymd(new Date(e.start))===ymd(now)).sort((a,b)=>new Date(a.start)-new Date(b.start));
   const cur=todays.find(e=>new Date(e.start)<=now&&new Date(e.end)>now); const next=todays.find(e=>new Date(e.start)>now);
   let html='';
   if(cur){
@@ -908,7 +914,7 @@ function renderNow(){
 // הרווחים מוצגים במפורש: זמן פנוי הוא המידע שהמסך הזה נועד לתת.
 function renderDayRail(){
   const box=$("dayrail"), now=new Date();
-  const todays=S.events.filter(e=>ymd(new Date(e.start))===ymd(now)).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const todays=shownEvents().filter(e=>ymd(new Date(e.start))===ymd(now)).sort((a,b)=>new Date(a.start)-new Date(b.start));
   const rest=todays.filter(e=>new Date(e.end)>now);
   if(!rest.length){
     const what = todays.length ? "אין עוד אירועים היום" : "היום פנוי ביומן";
@@ -954,7 +960,7 @@ function renderTasks(){
               :`<div class="empty"><b>אין מטלות פתוחות</b>${T().tasksEmpty}</div>`);
 }
 function renderFilter(){
-  const cals=S.cfg.calendars||[];
+  const cals=(S.cfg.calendars||[]).filter(c=>calShown(c.id));
   const loose=(S.cfg.tags||[]).filter(t=>!t.calendarId&&t.name);
   if(!cals.length&&!loose.length){ $('filter').innerHTML=''; return; }
   const on=(t,id)=>!!filterSel&&filterSel.t===t&&filterSel.id===id;
@@ -967,7 +973,7 @@ function renderWeek(){
   const start=new Date(); start.setHours(0,0,0,0); let html='';
   for(let i=0;i<7;i++){
     const d=new Date(start); d.setDate(d.getDate()+i);
-    const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e)).sort((a,b)=>new Date(a.start)-new Date(b.start));
+    const evs=shownEvents().filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e)).sort((a,b)=>new Date(a.start)-new Date(b.start));
     html+=`<div class="dayhead ${i===0?'today':''}">${i===0?'היום':'יום '+HE_DAYS[d.getDay()]} · ${d.getDate()}.${d.getMonth()+1}</div>`;
     html+=evs.length?evs.map(e=>{const h=accentOf(e);return `<div class="ev" style="${hatVars(h.color)}"><div class="time">${hhmm(new Date(e.start))}<br>${hhmm(new Date(e.end))}</div><div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>${e.location?`<div class="loc">${esc(e.location)}</div>`:''}</div></div>`;}).join('')
       :`<div class="ev" style="--hat:transparent"><div class="time"></div><div class="loc">פנוי</div></div>`;
@@ -981,7 +987,7 @@ function renderMonth(){
   for(let i=0;i<startOff;i++) html+=`<div class="d other"></div>`;
   for(let n=1;n<=days;n++){
     const d=new Date(now.getFullYear(),now.getMonth(),n);
-    const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e));
+    const evs=shownEvents().filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e));
     const cols=[...new Set(evs.map(e=>accentOf(e).color))].slice(0,3);
     const sel = monthSel===ymd(d) ? ' sel' : '';
     html+=`<button class="d${sel} ${ymd(d)===ymd(now)?'today':''} ${evs.length?'hatday':''}" data-day="${ymd(d)}" aria-pressed="${!!sel}" style="--load:${Math.min(4,evs.length)}"><span class="n">${n}</span><span class="dots">${cols.map(c=>`<i style="${hatVars(c)}"></i>`).join('')}</span></button>`;
@@ -990,7 +996,7 @@ function renderMonth(){
   // הרשת לבדה אינה מספיקה: בתא של 45 פיקסל אין מקום לכותרת אירוע.
   // לכן לחיצה על יום פותחת את האירועים שלו מתחת, כמו ביומני נייד.
   const dsel = monthSel ? new Date(monthSel+'T00:00:00') : now;
-  const list = S.events.filter(e=>ymd(new Date(e.start))===ymd(dsel)&&passFilter(e))
+  const list = shownEvents().filter(e=>ymd(new Date(e.start))===ymd(dsel)&&passFilter(e))
                        .sort((a,b)=>new Date(a.start)-new Date(b.start));
   html += `<div class="dayhead ${ymd(dsel)===ymd(now)?'today':''}">${ymd(dsel)===ymd(now)?'היום':'יום '+HE_DAYS[dsel.getDay()]} · ${dsel.getDate()}.${dsel.getMonth()+1}</div>`;
   html += list.length ? list.map(e=>{
@@ -1050,6 +1056,7 @@ function renderCalendars(){
       ${swatch}
       <input type="text" value="${esc(calName(c))}" data-f="calname" aria-label="שם היומן"${c.primary?' disabled':''}>
       ${palHtml}
+      <label class="shows"><input type="checkbox" data-f="calshow" ${calShown(c.id)?'checked':''}>מוצג אצלי</label>
       ${c.primary?'<div class="primary">היומן האישי. השם נלקח מהשם שלך בהגדרות.</div>'
                  :`<div class="acts"><button data-act="calsave">שמור שינויים</button><button class="danger" data-act="caldel">מחק יומן</button></div>`}
     </div>`;
@@ -1074,6 +1081,17 @@ $('tab-settings').addEventListener('change',collectSettings);
 $('tab-settings').addEventListener('input',()=>{ clearTimeout(saveT); saveT=setTimeout(collectSettings,600); });
 // יציאה מהמסך או מהאפליקציה שומרת מיד, בלי לחכות להשהיה.
 document.addEventListener('visibilitychange',()=>{ if(document.hidden) collectSettings(); });
+// הסתרת יומן היא בחירה של המכשיר הזה בלבד, ולכן נשמרת מקומית ולא בשרת.
+$('calendars').addEventListener('change',e=>{
+  const cb=e.target.closest('[data-f="calshow"]'); if(!cb) return;
+  const id=cb.closest('.calrow').dataset.id;
+  const set=new Set(S.cfg.hiddenCals||[]);
+  if(cb.checked) set.delete(id); else set.add(id);
+  S.cfg.hiddenCals=[...set]; save('cfg',S.cfg);
+  // סינון פעיל על יומן שהוסתר הופך את המסך לריק בלי הסבר.
+  if(filterSel&&filterSel.t==='cal'&&!calShown(filterSel.id)) filterSel=null;
+  renderAll();
+});
 $('calrefresh').addEventListener('click',refreshCalendars);
 // מחיקה מיידית ובלי אישור כפול: מונח שגוי הוא רעש, ולימוד מחדש הוא משפט אחד.
 $('terms').addEventListener('click',async e=>{
@@ -1562,7 +1580,7 @@ async function send(text){
       tags:S.cfg.tags.map(t=>({name:t.name,aliases:t.aliases,age:ageOf(t.dob),grade:gradeOf(t.dob)||null,hasCalendar:!!t.calendarId})),
       hasFamilyCalendar:!!S.cfg.familyCalendarId, mitmax:S.cfg.mitmax,
       tasks:S.tasks.filter(t=>!t.done).map(t=>({title:t.title,tags:(t.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!t.shared,author:t.author,importance:t.importance,due:t.due,mit:!!t.mit})),
-      events:S.events.filter(e=>{const d=new Date(e.start);return d>new Date(now.getTime()-2*3600e3)&&d<new Date(now.getTime()+8*86400e3);}).map(e=>({id:e.id,calendarId:e.calendarId,calendarName:e.calendarName,title:e.title,start:e.start,end:e.end,location:e.location,tags:(e.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!e.shared})),
+      events:shownEvents().filter(e=>{const d=new Date(e.start);return d>new Date(now.getTime()-2*3600e3)&&d<new Date(now.getTime()+8*86400e3);}).map(e=>({id:e.id,calendarId:e.calendarId,calendarName:e.calendarName,title:e.title,start:e.start,end:e.end,location:e.location,tags:(e.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!e.shared})),
     };
     const r=await api('chat',{message:text,images:imgs.map(i=>i.data),history:S.history.slice(-10),context:ctx});
     thinking.remove();
@@ -1587,7 +1605,7 @@ async function showDigest(){
 }
 function demoDigest(){
   const t=new Date(); t.setDate(t.getDate()+1);
-  const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(t)).sort((a,b)=>new Date(a.start)-new Date(b.start));
+  const evs=shownEvents().filter(e=>ymd(new Date(e.start))===ymd(t)).sort((a,b)=>new Date(a.start)-new Date(b.start));
   const L=['מחר, יום '+HE_DAYS[t.getDay()]+' '+t.getDate()+'.'+(t.getMonth()+1),'','הלוז:'];
   if(!evs.length) L.push('  אין אירועים ביומן. יום פתוח.');
   evs.forEach(e=>L.push('  '+hhmm(new Date(e.start))+'–'+hhmm(new Date(e.end))+'  '+e.title+(e.location?' · '+e.location:'')));
