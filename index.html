@@ -231,6 +231,9 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .prop .rep svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2}
 .prop .warn{margin-top:8px;font-size:14px;font-weight:600;color:var(--warn,#B4552B)}
 .prop .warn:empty{display:none}
+.prop .clash{margin-top:8px;padding:9px 11px;border-radius:10px;background:color-mix(in srgb,var(--warn) 14%,var(--card));border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);font-size:var(--fs-2);color:var(--ink)}
+.prop .clash:empty{display:none}
+.prop .clash b{color:var(--warn)}
 .prop .untilq{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .prop .untilq:empty{display:none}
 .termrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -1417,6 +1420,14 @@ function editForm(p){
       <label>רשימת פריטים, שורה לכל פריט<textarea data-e="items" rows="3" placeholder="למשל: חלב&#10;לחם&#10;ביצים">${esc((p.items||[]).map(x=>x.t).join(String.fromCharCode(10)))}</textarea></label>
     </div>`;
   }
+  if(p.type==='delete_event'){
+    return `<div class="edit" hidden>
+      <label>מה למחוק<select data-e="scope">
+        <option value="one" ${p.scope!=='all'?'selected':''}>רק המופע הזה</option>
+        <option value="all" ${p.scope==='all'?'selected':''}>כל הסדרה</option>
+      </select></label>
+    </div>`;
+  }
   if(p.type==='thought'){
     const lead=+p.lead||0;
     // הרשימה היא קיצור דרך, לא גבול. ערך שהמנוע החזיר ואינו ברשימה — "שלושה
@@ -1488,6 +1499,7 @@ function refreshProp(el,p){
   const pt=el.querySelector('.pt'); if(pt) pt.innerHTML=esc(d.title)+repChip(p)+tagChips(p.tags);
   const pm=el.querySelector('.pm'); if(pm) pm.textContent=d.meta;
   const w=el.querySelector('.warn'); if(w) w.textContent=repWarn(p);
+  const cl=el.querySelector('.clash'); if(cl) cl.innerHTML=clashHtml(p);
   const lbl=el.querySelector('.who4 .lbl');
   if(lbl) lbl.textContent=((p.tags||[]).length||(p.people||[]).length)?'שויך אל':'למי זה שייך?';
   updateDest(el,p); untilQuestion(el,p);
@@ -1549,12 +1561,44 @@ function describe(p){
     return {kind:'תזכורת לאירוע קיים',title:p.title||'אירוע',
       meta:(d&&!isNaN(d)?`יום ${HE_DAYS[d.getDay()]} ${d.getDate()}.${d.getMonth()+1} · ${hhmm(d)} · `:'')+remindWords(p.minutes)};
   }
+  if(p.type==='delete_event'){
+    const d=p.start?new Date(p.start):null;
+    return {kind:'ביטול אירוע',title:p.title||'אירוע',
+      meta:(d&&!isNaN(d)?`יום ${HE_DAYS[d.getDay()]} ${d.getDate()}.${d.getMonth()+1} · ${hhmm(d)}`:'')
+        +(p.scope==='all'?' · כל הסדרה':' · המופע הזה בלבד')};
+  }
   if(p.type==='thought') return {kind:'מחשבה למועד',title:p.text||'',
     meta:(p.occasion?p.occasion+' · ':'')+whenWords(nextOccurrence(p),+p.lead||0)};
   if(p.type==='term') return {kind:'מילה שלא הכרתי',title:p.term||'',
     meta:p.meaning?p.meaning:(p.guess?('ניחשתי: '+p.guess+'. לתקן אם לא מדויק.'):'מה זה? אחרי שתסביר, לא אשאל שוב.')};
   if(p.type==='email_draft') return {kind:'טיוטת מייל (לא נשלחת)',title:p.subject||'ללא נושא',meta:(p.to?'אל: '+p.to+'\n':'')+(p.body||'')};
   return {kind:p.type,title:JSON.stringify(p),meta:''};
+}
+// התנגשות נבדקת כאן ולא במנוע: באפליקציה יושבים כל האירועים, והתשובה דטרמיניסטית
+// ואינה תלויה בכך שהמנוע ישים לב. נבדקים כל היומנים המוצגים, ולא רק יומן היעד —
+// אירוע של אחת הבנות בזמן שיש לך פגישה הוא התנגשות אמיתית, גם אם הם ביומנים שונים.
+function conflictsFor(p){
+  if(!p||p.type!=='event'||!p.start||!p.end) return [];
+  const s=new Date(p.start), e=new Date(p.end);
+  if(isNaN(s)||isNaN(e)) return [];
+  return shownEvents().filter(x=>{
+    const xs=new Date(x.start), xe=new Date(x.end);
+    if(isNaN(xs)||isNaN(xe)) return false;
+    return s<xe && xs<e;
+  }).sort((a,b)=>new Date(a.start)-new Date(b.start));
+}
+// טקסט אחד לשני השימושים: המסך והקול. בלי תגיות, וההגנה נעשית ברינדור.
+function clashWords(list){
+  return list.map(x=>{
+    const who=accentOf(x).name;
+    return x.title+' '+hhmm(new Date(x.start))+'-'+hhmm(new Date(x.end))+(who?' · '+who:'');
+  }).join(', ');
+}
+function clashHtml(p){
+  const list=conflictsFor(p);
+  if(!list.length) return '';
+  const head=list.length===1?'כבר יש משהו בשעה הזאת':'כבר יש '+list.length+' דברים בשעה הזאת';
+  return '<b>'+head+':</b> '+esc(clashWords(list))+(p.repeat&&p.repeat.freq?' — נבדק על המופע הראשון בלבד.':'');
 }
 function reminderList(){ return String(S.cfg.remind||'').split(',').map(x=>parseInt(x,10)).filter(n=>!isNaN(n)); }
 // שני המבוגרים. השם השני נשמר בהגדרות ואינו בקוד.
@@ -1569,7 +1613,7 @@ function addProposal(p){
   const id='p'+Date.now()+Math.random().toString(36).slice(2,6);
   // ניחוש רק כשלא נאמר במפורש שזה פרטי. "תכניס לי" הוא החלטה, לא חוסר מידע.
   p.tags=normTags(p.tags);
-  if(p.type==='term'||p.type==='thought'){ p.tags=[]; p.shared=false; }
+  if(p.type==='term'||p.type==='thought'||p.type==='delete_event'){ p.tags=[]; p.shared=false; }
   else if(!p.tags.length && p.shared!==false) p.tags=guessTags((p.title||'')+' '+(p.body||''));
   // סדרה בלי סוף אינה ניתנת לאישור, ולכן הכרטיס שואל עד מתי במקום להיתקע.
   // השאלה נשאלת ואינה מוכרעת לבד: תאריך סיום הוא החלטה, לא השלמה טכנית.
@@ -1581,7 +1625,7 @@ function addProposal(p){
   const h=accentOf(p); const d=describe(p);
   const el=document.createElement('div'); el.className='prop'; el.style.setProperty('--hat',h.color); el.dataset.id=id;
   // למונח אין בעלים ואין פרטי או משותף. הוא מילה במילון, לא פריט ביומן.
-  const isTerm=p.type==='term'||p.type==='thought';
+  const isTerm=p.type==='term'||p.type==='thought'||p.type==='delete_event';
   const canShare=p.type!=='email_draft'&&!isTerm;
   el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}${h.name?' · ':''}${esc(d.kind)}</div>
     <div class="pt">${esc(d.title)}${repChip(p)}${tagChips(p.tags)}</div><div class="pm">${esc(d.meta)}</div>
@@ -1593,6 +1637,7 @@ function addProposal(p){
     </div>`}
     ${canShare?`<div class="vis"><button data-vis="0" aria-pressed="${!p.shared}">${LOCK_ICON}פרטי</button><button data-vis="1" aria-pressed="${p.shared}">${SHARE_ICON}משותף</button><span class="status dest"></span></div>`:''}
     <div class="warn">${esc(repWarn(p))}</div>
+    <div class="clash">${clashHtml(p)}</div>
     <div class="untilq"></div>
     ${editForm(p).replace(' hidden>','>')}
     <div class="acts"><button class="yes" data-act="approve">${T().approve}</button><button class="no" data-act="reject">לא עכשיו</button></div>
@@ -1670,6 +1715,12 @@ async function approve(id,el){
       const r=await api('remindEvent',{id:p.eventId,calendarId:p.calendarId||'',reminders:(p.minutes&&p.minutes.length)?p.minutes:[60]});
       addLog('נוספה תזכורת ל'+(r.title||p.title||'אירוע')+': '+remindWords(p.minutes),{by:'באישורך'});
       await loadAgenda();
+    } else if(p.type==='delete_event'){
+      if(!p.eventId){ st.textContent='חסר מזהה אירוע. אפשר למחוק מהמסך.'; return; }
+      const one=p.scope!=='all';
+      await api('deleteEvent',{id:p.eventId,calendarId:p.calendarId||'',series:!one,scope:one?'one':'all',start:p.start});
+      addLog('בוטל מהיומן: '+(p.title||'אירוע')+(one?'':' (כל הסדרה)'),{by:'באישורך'});
+      await loadAgenda();
     } else if(p.type==='thought'){
       const txt=String(p.text||'').trim();
       if(!txt){ st.textContent='כתוב את המחשבה לפני השמירה.'; return; }
@@ -1710,7 +1761,7 @@ async function send(text){
       tags:S.cfg.tags.map(t=>({name:t.name,aliases:t.aliases,age:ageOf(t.dob),grade:gradeOf(t.dob)||null,hasCalendar:!!t.calendarId})),
       hasFamilyCalendar:!!S.cfg.familyCalendarId, mitmax:S.cfg.mitmax,
       tasks:S.tasks.filter(t=>!t.done).map(t=>({title:t.title,tags:(t.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!t.shared,author:t.author,importance:t.importance,due:t.due,mit:!!t.mit})),
-      events:shownEvents().filter(e=>{const d=new Date(e.start);return d>new Date(now.getTime()-2*3600e3)&&d<new Date(now.getTime()+8*86400e3);}).map(e=>({id:e.id,calendarId:e.calendarId,calendarName:e.calendarName,title:e.title,start:e.start,end:e.end,location:e.location,tags:(e.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!e.shared})),
+      events:shownEvents().filter(e=>{const d=new Date(e.start);return d>new Date(now.getTime()-2*3600e3)&&d<new Date(now.getTime()+8*86400e3);}).map(e=>({id:e.id,calendarId:e.calendarId,calendarName:e.calendarName,title:e.title,start:e.start,end:e.end,location:e.location,recurring:!!e.recurring,tags:(e.tags||[]).map(k=>(tagOf(k)||{}).name),shared:!!e.shared})),
     };
     const r=await api('chat',{message:text,images:imgs.map(i=>i.data),history:S.history.slice(-10),context:ctx});
     thinking.remove();
@@ -2076,7 +2127,8 @@ function spokenCard(p){
       +', בשעה '+hhmm(a)+' עד '+hhmm(b)
       +(p.location?', ב'+p.location:'')
       +(p.repeat&&p.repeat.freq?', חוזר '+(FREQ_HE[p.repeat.freq]||'')+(p.repeat.until?' עד '+spokenDate(p.repeat.until):''):'')
-      +(extraRemind(remindFor(p)).length?'. '+remindWords(extraRemind(remindFor(p))):'');
+      +(extraRemind(remindFor(p)).length?'. '+remindWords(extraRemind(remindFor(p))):'')
+      +(conflictsFor(p).length?'. שים לב, כבר יש בשעה הזאת '+clashWords(conflictsFor(p)):'');
   }
   if(p.type==='task'){
     const d=p.due?new Date(p.due):null;
@@ -2090,6 +2142,11 @@ function spokenCard(p){
     return 'תזכורת לאירוע קיים. '+(p.title||'')
       +(d&&!isNaN(d)?'. יום '+HE_DAYS[d.getDay()]+', '+d.getDate()+' ב'+HE_MONTHS[d.getMonth()]+', בשעה '+hhmm(d):'')
       +(extraRemind(p.minutes).length?'. '+remindWords(extraRemind(p.minutes)):'');
+  }
+  if(p.type==='delete_event'){
+    const d=p.start?new Date(p.start):null;
+    return 'ביטול אירוע. '+(p.title||'')+(d&&!isNaN(d)?'. יום '+HE_DAYS[d.getDay()]+', '+d.getDate()+' ב'+HE_MONTHS[d.getMonth()]+', בשעה '+hhmm(d):'')
+      +(p.scope==='all'?'. כל הסדרה':'. המופע הזה בלבד');
   }
   if(p.type==='thought') return 'מחשבה למועד. '+(p.text||'')+'. '+(p.occasion?'ב'+p.occasion+'. ':'')+'אזכיר לך '+((+p.lead||0)?(+p.lead)+' ימים לפני':'ביום עצמו')+'.';
   if(p.type==='term') return 'לא הכרתי את '+(p.term||'')+'.';

@@ -25,7 +25,7 @@
 ## פרוטוקול אפליקציה ↔ שרת
 בקשה: POST עם גוף JSON בטקסט רגיל, שדה action ושדות לפי הפעולה. פעולות: ping, agenda, calendars, colors, createCalendar, updateCalendar, deleteCalendar, shareCalendar, shareAll, createEvent, deleteEvent, remindEvent, tasks, addTask, updateTask, deleteTask, syncTasks, terms, addTerm, deleteTerm, thoughts, addThought, deleteThought, createDraft, log, digest, setDigest, chat.
 כל בקשה נושאת שדה secret. כשמוגדר APP_SECRET בשרת, בקשה בלי סוד תואם נדחית.
-תשובת chat: {reply, proposals[], warning?} כאשר כל הצעה היא event / task / reminder / email_draft / term / thought, עם שדות tags, shared, why.
+תשובת chat: {reply, proposals[], warning?} כאשר כל הצעה היא event / task / reminder / delete_event / email_draft / term / thought, עם שדות tags, shared, why.
 מחשבה למועד: לקח שכדאי להיזכר בו במועד חוזר נשמר כהצעה מסוג thought, בגיליון "מחשבות" בגיליון המשותף. המופע הבא מחושב בכל שנה מחדש מהתאריך העברי או הלועזי, והמחשבה חוזרת בתקציר הערב כמה ימים לפני המועד.
 מונח חדש: מילה שהמנוע אינו מכיר חוזרת כהצעה מסוג term ולעולם לא מבטלת את הבקשה. שאר ההצעות חוזרות כרגיל לצידה. מה שהמשתמש עונה נשמר בגיליון "מילון" בגיליון המשותף, נקרא בכל שיחה, וניתן לעריכה בהגדרות.
 
