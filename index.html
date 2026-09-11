@@ -195,6 +195,9 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .evbody .evlbl{display:block;font-weight:600;margin:22px 0 6px}
 .evbody select{width:100%;padding:11px 12px;border:1px solid var(--line-2);border-radius:10px;font:inherit;background:var(--field);color:var(--ink);min-height:46px}
 .evbody .evstat{margin-top:12px;font-size:var(--fs-2);color:var(--ink-2)}
+.evbody .evscope{display:flex;gap:8px;margin-top:6px}
+.evbody .evscope button{flex:1;padding:11px 10px;border-radius:10px;background:var(--field);border:1px solid var(--line);color:var(--ink-2);font-size:var(--fs-2);min-height:46px}
+.evbody .evscope button[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 26%,var(--card));color:var(--ink);font-weight:600;border-color:var(--accent)}
 .chat{position:fixed;inset:0;background:var(--paper);transform:translateY(100%);transition:transform .28s ease;z-index:30;display:flex;flex-direction:column}
 .chat.open{transform:none}
 .chat .bar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--card)}
@@ -1768,7 +1771,7 @@ $('sharedigest').addEventListener('click',async()=>{
 /* ===================== אירוע ביומן: פרטים, תזכורת, מחיקה ===================== */
 // עד היום אפשר היה לבטל אירוע רק מיומן הפעולות, ורק אם העוזר יצר אותו במכשיר הזה.
 // אירוע שנקבע מהטלפון השני, או ישירות ביומן גוגל, לא היה ניתן לנגיעה בכלל.
-let evSel=null;
+let evSel=null, evScope='one';   // ברירת המחדל היא המופע הבודד, הפעולה ההפיכה יותר
 function openEvent(id,calId){
   const e=S.events.find(x=>String(x.id)===String(id)&&String(x.calendarId||'')===String(calId||''));
   if(!e) return;
@@ -1779,16 +1782,27 @@ function openEvent(id,calId){
     +`<div class="evmeta">יום ${HE_DAYS[a.getDay()]}, ${a.getDate()} ב${HE_MONTHS[a.getMonth()]} · ${timeRange(a,b)}</div>`
     +(e.location?`<div class="evmeta" dir="auto">${esc(e.location)}</div>`:'')
     +`<div class="evmeta"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name||'')}${tagChips(e.tags)}</div>`
-    +(e.recurring?`<div class="evwarn">אירוע חוזר. מחיקה כאן מוחקת את כל הסדרה, לא רק את המופע הזה.</div>`:'')
+    +(e.recurring?`<label class="evlbl">מה למחוק</label>`
+      +`<div class="evscope">`
+      +`<button data-scope="one" aria-pressed="true">רק המופע הזה</button>`
+      +`<button data-scope="all" aria-pressed="false">כל הסדרה</button>`
+      +`</div>`:'')
     +`<label class="evlbl" for="evrem">תזכורת</label>`
     +`<select id="evrem">${remindOptions(reminderList())}</select>`
     +`<div class="evstat" id="evstat">"החל תזכורת" מחליף את התזכורות הקיימות על האירוע.</div>`;
+  evScope='one';
   const d=$('evdel'); d.textContent='מחק מהיומן'; d.dataset.armed='';
   $('evremind').textContent='החל תזכורת';
   $('evsheet').setAttribute('aria-hidden','false');
 }
 function closeEvent(){ $('evsheet').setAttribute('aria-hidden','true'); evSel=null; }
 $('closeev').addEventListener('click',closeEvent);
+$('evbody').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-scope]'); if(!b) return;
+  evScope=b.dataset.scope;
+  $('evbody').querySelectorAll('button[data-scope]').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));
+  const d=$('evdel'); d.dataset.armed=''; d.textContent='מחק מהיומן';
+});
 ['dayrail','week','month'].forEach(id=>{
   const box=$(id); if(!box) return;
   box.addEventListener('click',e=>{
@@ -1813,15 +1827,16 @@ $('evdel').addEventListener('click',async()=>{
   const btn=$('evdel');
   if(btn.dataset.armed!=='1'){
     btn.dataset.armed='1';
-    btn.textContent=evSel.recurring?'למחוק את כל הסדרה?':'למחוק סופית?';
+    btn.textContent=!evSel.recurring?'למחוק סופית?':(evScope==='all'?'למחוק את כל הסדרה?':'למחוק רק את המופע הזה?');
     setTimeout(()=>{ if(btn.dataset.armed==='1'){ btn.dataset.armed=''; btn.textContent='מחק מהיומן'; } },5000);
     return;
   }
   btn.dataset.armed=''; btn.textContent='מוחק...';
   const title=evSel.title;
   try{
-    await api('deleteEvent',{id:evSel.id,calendarId:evSel.calendarId||'',series:!!evSel.recurring});
-    addLog('נמחק מהיומן: '+title+(evSel.recurring?' (כל הסדרה)':''),{by:'באישורך'});
+    const one=evSel.recurring&&evScope==='one';
+    await api('deleteEvent',{id:evSel.id,calendarId:evSel.calendarId||'',series:!!evSel.recurring&&!one,scope:one?'one':'all',start:evSel.start});
+    addLog('נמחק מהיומן: '+title+(evSel.recurring?(one?' (המופע של '+shortDate(dpart(evSel.start))+')':' (כל הסדרה)'):''),{by:'באישורך'});
     closeEvent(); toast('נמחק.'); await loadAgenda();
   }catch(err){ btn.textContent='מחק מהיומן'; $('evstat').textContent='לא נמחק: '+err.message; }
 });

@@ -46,7 +46,7 @@ function doPost(e) {
       case 'deleteCalendar': return json_(deleteCalendar_(b));
       case 'createCalendar': return json_(createCalendar_(b));
       case 'createEvent':    return json_(createEvent_(b));
-      case 'deleteEvent':    return json_(deleteEvent_(b.id, b.calendarId, b.series));
+      case 'deleteEvent':    return json_(b.scope === 'one' ? deleteOccurrence_(b.id, b.calendarId, b.start) : deleteEvent_(b.id, b.calendarId, b.series));
       case 'remindEvent':    return json_(remindEvent_(b));
       case 'tasks':          return json_({ tasks: listTasks_() });
       case 'addTask':        return json_(addTask_(b));
@@ -266,6 +266,28 @@ function remindEvent_(b) {
   throw new Error('האירוע לא נמצא ביומן');
 }
 
+// מחיקת מופע יחיד מתוך סדרה. כל המופעים חולקים מזהה אחד, ולכן אי אפשר לפנות
+// למופע לפי מזהה — getEventById מחזיר תמיד את הראשון. במקום זה מאתרים אותו
+// בחלון זמן צר סביב שעת ההתחלה שלו, ומוחקים את אובייקט המופע עצמו.
+// deleteEvent על מופע מוחק רק אותו; deleteEventSeries הוא זה שמוחק הכול.
+function deleteOccurrence_(id, calendarId, startIso) {
+  const start = new Date(startIso);
+  if (isNaN(start.getTime())) throw new Error('חסרה שעת ההתחלה של המופע');
+  const from = new Date(start.getTime() - 60000), to = new Date(start.getTime() + 60000);
+  const cals = calendarId ? [calById_(calendarId)] : visibleCalendars_();
+  for (const c of cals) {
+    const evs = c.getEvents(from, to);
+    for (const ev of evs) {
+      if (String(ev.getId()) !== String(id)) continue;
+      if (Math.abs(ev.getStartTime().getTime() - start.getTime()) > 60000) continue;
+      const t = ev.getTitle();
+      ev.deleteEvent();
+      log_('deleteEvent', t + ' · מופע יחיד ' + Utilities.formatDate(start, TZ, 'dd/MM/yyyy'), id, c.getId());
+      return { ok: true, single: true };
+    }
+  }
+  throw new Error('המופע לא נמצא ביומן. ייתכן שכבר נמחק.');
+}
 function deleteEvent_(id, calendarId, series) {
   const cals = calendarId ? [calById_(calendarId)] : visibleCalendars_();
   for (const c of cals) {
