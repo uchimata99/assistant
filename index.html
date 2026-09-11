@@ -743,10 +743,13 @@ function safeOn(color, surfaceHex){
 function hatVars(color){ return '--hat:'+safeOn(color,SURF_LIGHT)+';--hat-d:'+safeOn(color,SURF_DARK); }
 // הצבע והתווית של פריט נגזרים מהילד שהוא שייך אליו. אין יותר הקשרים ("כובעים"):
 // יום אחד מכיל אירועים של כולם, ולכן שיוך הקשר ליום לא תיאר את המציאות.
+// גוגל נותן ליומן הראשי את כתובת המייל כשם. במסך זה רעש, ולכן מוצג שם המשתמש.
+// רק בתצוגה: היומן עצמו בגוגל אינו נוגע בזה.
+function calName(c){ return (c&&c.primary) ? (S.cfg.me||'היומן שלי') : ((c&&c.name)||''); }
 function accentOf(x){
   // קודם כול הצבע של היומן שהאירוע יושב בו — זה מה שרואים ביומן גוגל עצמו.
   const cid=x&&x.calendarId;
-  if(cid){ const c=(S.cfg.calendars||[]).find(c=>c.id===cid); if(c&&c.color) return {name:c.name||'', color:c.color}; }
+  if(cid){ const c=(S.cfg.calendars||[]).find(c=>c.id===cid); if(c&&c.color) return {name:calName(c), color:c.color}; }
   // מטלות אינן יושבות ביומן, ולכן אצלן הצבע מגיע מהילד.
   const k=((x&&x.tags)||[])[0];
   const tg=k?tagOf(k):null;
@@ -829,7 +832,7 @@ function demoApi(action,p){
     at(5,10,0,120,'יום הולדת בגן','',{calendarId:'demo-kid3'}),
     at(4,16,0,60,'פגישה עם רואה חשבון',''),
   ];
-  const cals=[{id:'primary',name:'ראשי',primary:true},{id:'demo-family',name:'משפחה'},{id:'demo-kid1',name:'נועה'},{id:'demo-kid2',name:'איתי'},{id:'demo-kid3',name:'רוני'}];
+  const cals=[{id:'primary',name:'ראשי',primary:true,color:'#4986e7'},{id:'demo-family',name:'משפחה'},{id:'demo-kid1',name:'נועה'},{id:'demo-kid2',name:'איתי'},{id:'demo-kid3',name:'רוני'}];
   const wait=v=>new Promise(r=>setTimeout(()=>r(v),350));
   switch(action){
     case 'ping': return wait({ok:true,demo:true,calendars:cals});
@@ -957,7 +960,7 @@ function renderFilter(){
   const on=(t,id)=>!!filterSel&&filterSel.t===t&&filterSel.id===id;
   const chip=(t,id,name,color)=>`<button data-f="${t}" data-id="${esc(id)}" aria-pressed="${on(t,id)}" style="--tag:${safeOn(color||'#8A8F95',SURF_LIGHT)}"><i></i>${esc(name)}</button>`;
   $('filter').innerHTML=`<button data-f="" aria-pressed="${!filterSel}">הכל</button>`
-    +cals.map(c=>chip('cal',c.id,c.name,c.color)).join('')
+    +cals.map(c=>chip('cal',c.id,calName(c),c.color)).join('')
     +loose.map(t=>chip('tag',t.key,t.name,tagColor(t))).join('');
 }
 function renderWeek(){
@@ -1029,7 +1032,7 @@ async function loadServerLog(){
 }
 function addLog(text,extra={}){ S.log.push({text,ts:Date.now(),when:new Date().toLocaleString('he-IL',{dateStyle:'short',timeStyle:'short'}),...extra}); if(S.log.length>300)S.log.shift(); save('log',S.log); renderLog(); }
 
-function calOptions(sel){ const cals=S.cfg.calendars||[]; return `<option value="">— ללא —</option>`+cals.map(c=>`<option value="${esc(c.id)}" ${c.id===sel?'selected':''}>${esc(c.name)}</option>`).join(''); }
+function calOptions(sel){ const cals=S.cfg.calendars||[]; return `<option value="">— ללא —</option>`+cals.map(c=>`<option value="${esc(c.id)}" ${c.id===sel?'selected':''}>${esc(calName(c))}</option>`).join(''); }
 function renderCalendars(){
   const box=$('calendars'); if(!box) return;
   const cals=S.cfg.calendars||[];
@@ -1045,9 +1048,9 @@ function renderCalendars(){
       : '';
     return `<div class="calrow" data-id="${esc(c.id)}" data-color="${esc(col)}">
       ${swatch}
-      <input type="text" value="${esc(c.name)}" data-f="calname" aria-label="שם היומן"${c.primary?' disabled':''}>
+      <input type="text" value="${esc(calName(c))}" data-f="calname" aria-label="שם היומן"${c.primary?' disabled':''}>
       ${palHtml}
-      ${c.primary?'<div class="primary">היומן האישי הראשי. אי אפשר לשנות או למחוק אותו מכאן.</div>'
+      ${c.primary?'<div class="primary">היומן האישי. השם נלקח מהשם שלך בהגדרות.</div>'
                  :`<div class="acts"><button data-act="calsave">שמור שינויים</button><button class="danger" data-act="caldel">מחק יומן</button></div>`}
     </div>`;
   }).join('');
@@ -1165,6 +1168,7 @@ function readTagsFromForm(){
 let settingsReady=false;
 function collectSettings(){
   if(!settingsReady||!document.querySelector('#tags')) return;
+  const wasMe=S.cfg.me;
   S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value;
   S.cfg.partnerName=$('pname').value.trim(); S.cfg.familyCalendarId=$('famcal').value;
   S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value;
@@ -1172,6 +1176,8 @@ function collectSettings(){
   S.cfg.remind=$('remind').value; S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
   S.cfg.tags=readTagsFromForm();
   save('cfg',S.cfg);
+  // שם היומן האישי בבורר נגזר מהשם, ולכן משתנה איתו.
+  if(wasMe!==S.cfg.me) renderFilter();
 }
 function renderSettings(){
   renderInstall();
@@ -1415,7 +1421,7 @@ function peopleNames(){ return [S.cfg.me, S.cfg.partnerName].map(x=>String(x||''
 function targetCal(p){ // לאן נכנס אירוע משותף
   const kid=p.tags.map(tagOf).find(t=>t&&t.calendarId);
   if(kid) return {id:kid.calendarId,name:'היומן של '+kid.name};
-  if(p.shared&&S.cfg.familyCalendarId){ const c=(S.cfg.calendars||[]).find(c=>c.id===S.cfg.familyCalendarId); return {id:S.cfg.familyCalendarId,name:'היומן המשפחתי'+(c?' ('+c.name+')':'')}; }
+  if(p.shared&&S.cfg.familyCalendarId){ const c=(S.cfg.calendars||[]).find(c=>c.id===S.cfg.familyCalendarId); return {id:S.cfg.familyCalendarId,name:'היומן המשפחתי'+(c?' ('+calName(c)+')':'')}; }
   return {id:'',name:'היומן האישי שלך'};
 }
 function addProposal(p){
