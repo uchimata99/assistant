@@ -186,6 +186,15 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .sheet pre{flex:1;overflow-y:auto;margin:0;padding:16px;font-family:var(--font-body);font-size:17px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .sheet .acts{display:flex;gap:10px;padding:14px 16px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--card)}
 .sheet .acts .btn{flex:1}
+.sheet .acts .btn.danger{color:var(--err)}
+.sheet .acts .btn.danger[data-armed="1"]{background:var(--err);color:var(--on-ink)}
+.evbody{flex:1;overflow-y:auto;padding:18px}
+.evbody .evtitle{font-family:var(--font-head);font-weight:500;font-size:var(--fs-5);line-height:1.2;margin-bottom:10px}
+.evbody .evmeta{color:var(--ink-2);font-size:var(--fs-3);margin-top:6px}
+.evbody .evwarn{margin-top:14px;font-size:var(--fs-2);font-weight:600;color:var(--warn)}
+.evbody .evlbl{display:block;font-weight:600;margin:22px 0 6px}
+.evbody select{width:100%;padding:11px 12px;border:1px solid var(--line-2);border-radius:10px;font:inherit;background:var(--field);color:var(--ink);min-height:46px}
+.evbody .evstat{margin-top:12px;font-size:var(--fs-2);color:var(--ink-2)}
 .chat{position:fixed;inset:0;background:var(--paper);transform:translateY(100%);transition:transform .28s ease;z-index:30;display:flex;flex-direction:column}
 .chat.open{transform:none}
 .chat .bar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--card)}
@@ -544,6 +553,18 @@ details[open]>summary{border-bottom:1px solid var(--line)}
   <div class="acts">
     <button class="btn" id="sharedigest">שתף</button>
     <button class="btn ghost" id="copydigest">העתק</button>
+  </div>
+</div>
+
+<div class="sheet" id="evsheet" aria-hidden="true" role="dialog" aria-labelledby="evsheet-h">
+  <div class="bar">
+    <h3 id="evsheet-h">אירוע ביומן</h3>
+    <button class="ib" id="closeev" aria-label="סגור"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="evbody" id="evbody"></div>
+  <div class="acts">
+    <button class="btn" id="evremind">החל תזכורת</button>
+    <button class="btn ghost danger" id="evdel">מחק מהיומן</button>
   </div>
 </div>
 
@@ -938,7 +959,7 @@ function renderDayRail(){
     if(gap>=20) html+='<div class="gap"><span class="gtime">'+timeRange(cursor,s)+'</span><span>פנוי · '+fmtDur(gap)+'</span></div>';
     const h=accentOf(e), dur=Math.max(1,Math.round((en-s)/60000));
     const w=Math.max(6,Math.min(100,Math.round(dur/longest*100)));
-    html+='<div class="ev" style="'+hatVars(h.color)+'">'
+    html+='<div class="ev" data-ev="'+esc(e.id)+'" data-cal="'+esc(e.calendarId||'')+'" style="'+hatVars(h.color)+'">'
       +'<div class="time">'+timeRange(s,en)+'</div>'
       +'<div><div class="title" dir="auto">'+esc(e.title)+'</div>'
       +'<div class="loc">'+(e.location?esc(e.location):'')+tagChips(e.tags)+'</div>'
@@ -983,7 +1004,7 @@ function renderWeek(){
     const d=new Date(start); d.setDate(d.getDate()+i);
     const evs=shownEvents().filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e)).sort((a,b)=>new Date(a.start)-new Date(b.start));
     html+=`<div class="dayhead ${i===0?'today':''}">${i===0?'היום':'יום '+HE_DAYS[d.getDay()]} · ${d.getDate()}.${d.getMonth()+1}</div>`;
-    html+=evs.length?evs.map(e=>{const h=accentOf(e);return `<div class="ev" style="${hatVars(h.color)}"><div class="time">${hhmm(new Date(e.start))}<br>${hhmm(new Date(e.end))}</div><div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>${e.location?`<div class="loc">${esc(e.location)}</div>`:''}</div></div>`;}).join('')
+    html+=evs.length?evs.map(e=>{const h=accentOf(e);return `<div class="ev" data-ev="${esc(e.id)}" data-cal="${esc(e.calendarId||'')}" style="${hatVars(h.color)}"><div class="time">${hhmm(new Date(e.start))}<br>${hhmm(new Date(e.end))}</div><div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>${e.location?`<div class="loc">${esc(e.location)}</div>`:''}</div></div>`;}).join('')
       :`<div class="ev" style="--hat:transparent"><div class="time"></div><div class="loc">פנוי</div></div>`;
   }
   $('week').innerHTML=html;
@@ -1009,7 +1030,7 @@ function renderMonth(){
   html += `<div class="dayhead ${ymd(dsel)===ymd(now)?'today':''}">${ymd(dsel)===ymd(now)?'היום':'יום '+HE_DAYS[dsel.getDay()]} · ${dsel.getDate()}.${dsel.getMonth()+1}</div>`;
   html += list.length ? list.map(e=>{
       const h=accentOf(e);
-      return `<div class="ev" style="${hatVars(h.color)}"><div class="time">${timeRange(new Date(e.start),new Date(e.end))}</div>`
+      return `<div class="ev" data-ev="${esc(e.id)}" data-cal="${esc(e.calendarId||'')}" style="${hatVars(h.color)}"><div class="time">${timeRange(new Date(e.start),new Date(e.end))}</div>`
         +`<div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>`
         +(e.location?`<div class="loc">${esc(e.location)}</div>`:'')+`</div></div>`;
     }).join('')
@@ -1725,7 +1746,7 @@ function demoDigest(){
 $('showdigest').addEventListener('click',showDigest);
 $('closesheet').addEventListener('click',closeSheet);
 // יציאה גם במקש חזרה, כדי שלא ייווצר תחושת נעילה
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeSheet(); closeChat&&closeChat(); } });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeSheet(); closeEvent&&closeEvent(); closeChat&&closeChat(); } });
 $('copydigest').addEventListener('click',async()=>{
   if(!digestText) return;
   try{ await navigator.clipboard.writeText(digestText); toast('הועתק.'); }
@@ -1742,6 +1763,67 @@ $('sharedigest').addEventListener('click',async()=>{
   if(!navigator.share){ toast('אין שיתוף בדפדפן הזה. אפשר להעתיק.'); return; }
   try{ await navigator.share({title:'הלוז של מחר',text:digestText}); }
   catch(err){ if(err.name!=='AbortError') toast('השיתוף נכשל.'); }
+});
+
+/* ===================== אירוע ביומן: פרטים, תזכורת, מחיקה ===================== */
+// עד היום אפשר היה לבטל אירוע רק מיומן הפעולות, ורק אם העוזר יצר אותו במכשיר הזה.
+// אירוע שנקבע מהטלפון השני, או ישירות ביומן גוגל, לא היה ניתן לנגיעה בכלל.
+let evSel=null;
+function openEvent(id,calId){
+  const e=S.events.find(x=>String(x.id)===String(id)&&String(x.calendarId||'')===String(calId||''));
+  if(!e) return;
+  evSel=e;
+  const a=new Date(e.start), b=new Date(e.end), h=accentOf(e);
+  $('evbody').innerHTML=
+    `<div class="evtitle" dir="auto">${esc(e.title)}</div>`
+    +`<div class="evmeta">יום ${HE_DAYS[a.getDay()]}, ${a.getDate()} ב${HE_MONTHS[a.getMonth()]} · ${timeRange(a,b)}</div>`
+    +(e.location?`<div class="evmeta" dir="auto">${esc(e.location)}</div>`:'')
+    +`<div class="evmeta"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name||'')}${tagChips(e.tags)}</div>`
+    +(e.recurring?`<div class="evwarn">אירוע חוזר. מחיקה כאן מוחקת את כל הסדרה, לא רק את המופע הזה.</div>`:'')
+    +`<label class="evlbl" for="evrem">תזכורת</label>`
+    +`<select id="evrem">${remindOptions(reminderList())}</select>`
+    +`<div class="evstat" id="evstat">"החל תזכורת" מחליף את התזכורות הקיימות על האירוע.</div>`;
+  const d=$('evdel'); d.textContent='מחק מהיומן'; d.dataset.armed='';
+  $('evremind').textContent='החל תזכורת';
+  $('evsheet').setAttribute('aria-hidden','false');
+}
+function closeEvent(){ $('evsheet').setAttribute('aria-hidden','true'); evSel=null; }
+$('closeev').addEventListener('click',closeEvent);
+['dayrail','week','month'].forEach(id=>{
+  const box=$(id); if(!box) return;
+  box.addEventListener('click',e=>{
+    const row=e.target.closest('.ev[data-ev]'); if(!row) return;
+    openEvent(row.dataset.ev,row.dataset.cal);
+  });
+});
+$('evremind').addEventListener('click',async()=>{
+  if(!evSel) return;
+  const v=Number(($('evrem')||{}).value);
+  const btn=$('evremind'); btn.textContent='מחיל...';
+  try{
+    // replace ולא מיזוג: כאן המשתמש קובע מה התזכורת, ולא מוסיף עוד אחת.
+    await api('remindEvent',{id:evSel.id,calendarId:evSel.calendarId||'',reminders:v<0?[]:[v],replace:true});
+    addLog('שונתה תזכורת ל'+evSel.title+': '+remindWords(v<0?[]:[v]),{by:'באישורך'});
+    $('evstat').textContent='התזכורת עודכנה.'; btn.textContent='החל תזכורת';
+  }catch(err){ btn.textContent='החל תזכורת'; $('evstat').textContent='לא עודכן: '+err.message; }
+});
+// שני שלבים במכוון: מחיקה מהיומן אינה הפיכה, ובאירוע חוזר היא מוחקת סדרה שלמה.
+$('evdel').addEventListener('click',async()=>{
+  if(!evSel) return;
+  const btn=$('evdel');
+  if(btn.dataset.armed!=='1'){
+    btn.dataset.armed='1';
+    btn.textContent=evSel.recurring?'למחוק את כל הסדרה?':'למחוק סופית?';
+    setTimeout(()=>{ if(btn.dataset.armed==='1'){ btn.dataset.armed=''; btn.textContent='מחק מהיומן'; } },5000);
+    return;
+  }
+  btn.dataset.armed=''; btn.textContent='מוחק...';
+  const title=evSel.title;
+  try{
+    await api('deleteEvent',{id:evSel.id,calendarId:evSel.calendarId||'',series:!!evSel.recurring});
+    addLog('נמחק מהיומן: '+title+(evSel.recurring?' (כל הסדרה)':''),{by:'באישורך'});
+    closeEvent(); toast('נמחק.'); await loadAgenda();
+  }catch(err){ btn.textContent='מחק מהיומן'; $('evstat').textContent='לא נמחק: '+err.message; }
 });
 
 /* ===================== תמונות ושיתוף מאפליקציות ===================== */

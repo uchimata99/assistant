@@ -204,7 +204,10 @@ function agenda_(days) {
     const cid = c.getId(), mine = c.isMyPrimaryCalendar();
     c.getEvents(start, end).forEach(ev => {
       if (ev.isAllDayEvent()) return;
-      evs.push({ id: ev.getId(), calendarId: cid, calendarName: c.getName(), shared: !mine,
+      // אירוע חוזר מסומן כאן, כדי שהאפליקציה תוכל להזהיר לפני מחיקה: מחיקה של
+      // מופע בודד אינה אפשרית בשירות המובנה, ולכן מחיקה מוחקת את כל הסדרה.
+      let rec = false; try { rec = ev.isRecurringEvent(); } catch (e) {}
+      evs.push({ id: ev.getId(), calendarId: cid, calendarName: c.getName(), shared: !mine, recurring: rec,
         title: ev.getTitle(), start: ev.getStartTime().toISOString(), end: ev.getEndTime().toISOString(), location: ev.getLocation() || '' });
     });
   });
