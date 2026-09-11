@@ -53,6 +53,9 @@ function doPost(e) {
       case 'updateTask':     return json_(updateTask_(b));
       case 'deleteTask':     return json_(deleteTask_(b));
       case 'syncTasks':      return json_(syncGoogleTasks_());
+      case 'thoughts':       return json_({ thoughts: listThoughts_() });
+      case 'addThought':     return json_(addThought_(b));
+      case 'deleteThought':  return json_(deleteThought_(b));
       case 'terms':          return json_({ terms: listTerms_() });
       case 'addTerm':        return json_(addTerm_(b));
       case 'deleteTerm':     return json_(deleteTerm_(b));
@@ -372,6 +375,126 @@ function readLog_(limit) {
   })).reverse();
 }
 
+/* ---------- מחשבות תלויות זמן ---------- */
+/*
+ * לקח שנלמד פעם אחת וחוזר בדיוק כשהוא רלוונטי: "ערב ראש השנה, לא ללכת לקניון".
+ * המחשבה נשמרת עם תאריך עוגן, והמופע הבא שלה מחושב מחדש בכל שנה.
+ *
+ * הלוח העברי אינו חוזר באותו תאריך לועזי — ערב ראש השנה נודד כאחד עשר יום בשנה.
+ * לכן העוגן נשמר כתאריך, והחודש והיום העבריים נגזרים ממנו בכל בדיקה דרך Intl,
+ * בלי ספרייה ובלי טבלה שתתיישן. אם המנוע אינו תומך בלוח העברי, נופלים בחזרה
+ * ללוח הלועזי ואומרים זאת, במקום להחזיר תאריך שגוי בשקט.
+ */
+const THOUGHT_HEADER = ['מחשבה', 'המועד', 'תאריך עוגן', 'לוח', 'ימים לפני', 'מי הוסיף', 'נוצר', 'נאמר לאחרונה'];
+
+function thoughtsTab_() {
+  const ss = sharedSheet_();
+  if (!ss) throw new Error('הגיליון המשותף לא מוגדר, ובלעדיו אין מחשבות משותפות.');
+  let sh = ss.getSheetByName('מחשבות');
+  if (!sh) { sh = ss.insertSheet('מחשבות'); sh.appendRow(THOUGHT_HEADER); }
+  return sh;
+}
+function dayUTC_(iso) { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); }
+function ymdUTC_(d) { return d.toISOString().slice(0, 10); }
+// null כשאין תמיכה בלוח העברי. כל מי שקורא חייב לטפל בזה.
+function hebOf_(d) {
+  try {
+    const f = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const p = {}; const parts = f.formatToParts(d);
+    for (let i = 0; i < parts.length; i++) p[parts[i].type] = parts[i].value;
+    if (!p.month || !p.day) return null;
+    return { m: p.month, d: Number(p.day), y: Number(p.year) };
+  } catch (e) { return null; }
+}
+// מחכים לצאת מהחודש לפני שמחפשים כניסה אליו, אחרת חישוב שמתחיל ביום האירוע
+// עצמו נתפס שוב באותו חודש ומחזיר את סופו במקום את השנה הבאה.
+function nextHeb_(month, day, fromIso) {
+  const from = dayUTC_(fromIso);
+  let left = false, matched = false, lastInMonth = null;
+  for (let add = 1; add <= 400; add++) {
+    const c = new Date(from.getTime() + add * 86400000);
+    const h = hebOf_(c); if (!h) return null;
+    const same = h.m === month || h.m.indexOf(month) === 0;   // אדר מתאים גם לאדר א׳
+    if (!same) { left = true; if (matched) break; continue; }
+    if (!left) continue;
+    matched = true; lastInMonth = c;
+    if (h.d === day) return ymdUTC_(c);
+  }
+  // חודש שאין בו את היום המבוקש (ל׳ בחשוון בשנה קצרה) נופל ליום האחרון שבו.
+  return lastInMonth ? ymdUTC_(lastInMonth) : null;
+}
+function nextGreg_(anchorIso, fromIso) {
+  const a = dayUTC_(anchorIso), from = dayUTC_(fromIso);
+  for (let y = from.getUTCFullYear(); y <= from.getUTCFullYear() + 2; y++) {
+    const c = new Date(Date.UTC(y, a.getUTCMonth(), a.getUTCDate(), 12));
+    if (c > from) return ymdUTC_(c);
+  }
+  return null;
+}
+function nextOccurrence_(t, fromIso) {
+  if (!t.anchor) return null;
+  if (t.cal === 'heb') {
+    const h = hebOf_(dayUTC_(t.anchor));
+    if (h) return nextHeb_(h.m, h.d, fromIso);
+  }
+  return nextGreg_(t.anchor, fromIso);
+}
+
+function rowToThought_(r) {
+  return { text: String(r[0] || ''), occasion: String(r[1] || ''), anchor: fmtDate_(r[2]),
+    cal: String(r[3] || 'greg'), lead: Number(r[4]) || 7, author: String(r[5] || ''),
+    lastSaid: r[7] ? fmtDate_(r[7]) : '' };
+}
+function listThoughts_(fromIso) {
+  try {
+    const from = fromIso || Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+    const vals = thoughtsTab_().getDataRange().getValues();
+    const out = [];
+    for (let i = 1; i < vals.length; i++) {
+      if (!vals[i][0]) continue;
+      const t = rowToThought_(vals[i]);
+      t.row = i + 1;
+      t.next = nextOccurrence_(t, from);
+      t.daysAway = t.next ? Math.round((dayUTC_(t.next) - dayUTC_(from)) / 86400000) : null;
+      out.push(t);
+    }
+    out.sort(function (a, b) { return (a.daysAway === null ? 9999 : a.daysAway) - (b.daysAway === null ? 9999 : b.daysAway); });
+    return out;
+  } catch (e) { return []; }
+}
+function addThought_(b) {
+  const text = String(b.text || '').trim();
+  if (!text) throw new Error('חסר טקסט למחשבה');
+  const anchor = String(b.anchor || '').slice(0, 10);
+  if (!/^d{4}-d{2}-d{2}$/.test(anchor)) throw new Error('חסר תאריך עוגן תקין');
+  const cal = b.cal === 'heb' ? 'heb' : 'greg';
+  let lead = Number(b.lead); if (isNaN(lead) || lead < 0 || lead > 90) lead = 7;
+  thoughtsTab_().appendRow([text, String(b.occasion || ''), anchor, cal, lead, b.me || '', new Date(), '']);
+  log_('addThought', text.slice(0, 80) + ' · ' + (b.occasion || anchor));
+  return { ok: true, thoughts: listThoughts_() };
+}
+function deleteThought_(b) {
+  const text = String(b.text || '').trim();
+  const sh = thoughtsTab_();
+  const vals = sh.getDataRange().getValues();
+  for (let i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]).trim() === text) { sh.deleteRow(i + 1); log_('deleteThought', text.slice(0, 80)); return { ok: true, thoughts: listThoughts_() }; }
+  }
+  return { ok: false, thoughts: listThoughts_() };
+}
+// מה שנכנס לחלון ההתראה ועוד לא נאמר על המופע הזה.
+function dueThoughts_(fromIso) {
+  const from = fromIso || Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  return listThoughts_(from).filter(function (t) {
+    return t.daysAway !== null && t.daysAway <= t.lead && t.lastSaid !== t.next;
+  });
+}
+function markSaid_(list) {
+  if (!list.length) return;
+  const sh = thoughtsTab_();
+  list.forEach(function (t) { if (t.row) sh.getRange(t.row, 8).setValue(t.next); });
+}
+
 /* ---------- מילון המונחים ---------- */
 /*
  * מילים וקיצורים שהמנוע אינו מכיר: שם מגרש, כינוי של מוסד, קיצור מהבית.
@@ -576,6 +699,9 @@ function chat_(b) {
   const fem = ctx.gender === 'f';
   // נקרא כאן ולא נשלח מהאפליקציה: כך מונח שנלמד במכשיר אחד תופס מיד בשני.
   const terms = listTerms_();
+  // רק מה שקרוב. מחשבה שרחוקה חצי שנה היא רעש בהקשר של היום.
+  const soon = listThoughts_().filter(function (t) { return t.daysAway !== null && t.daysAway <= 45; })
+    .map(function (t) { return { text: t.text, occasion: t.occasion, when: t.next, daysAway: t.daysAway }; });
   const system = [
     'אתה עוזר אישי של ' + (ctx.me || 'המשתמש') + '. ' + (fem ? 'פנה אליה בלשון נקבה.' : 'פנה אליו בלשון זכר.') + ' ענה בעברית, קצר וישיר, בלי מילות ריצוד.',
     'זהו מכשיר של אחד משני בני זוג. לכל אחד עוזר משלו; מה שמסומן "משותף" נראה אצל שניהם.',
@@ -602,6 +728,9 @@ function chat_(b) {
     'מילון המונחים שלכם: ' + JSON.stringify(terms) + '. השתמש בו כדי להבין מילים, שמות מקומות וקיצורים אישיים. מונח שמופיע במילון מובן, ואין לשאול עליו שוב.',
     'מילה שאינך מכיר: אם בהודעה יש מילה שנראית שם של מקום, מוסד, חוג, אדם או קיצור אישי, והיא אינה במילון, אינה שם של ילד ואינה מילה רגילה בעברית — אל תבטל את הבקשה, אל תשתוק ואל תנחש בשקט. החזר את כל ההצעות שכן הובנו, ובנוסף הצעה מסוג term על אותה מילה. זו הדרך היחידה של המשתמש ללמד אותך את השפה שלו.',
     'מתי לא לשאול על מילה: מילים רגילות בעברית, ערים ומקומות מוכרים, שמות הילדים והכינויים שלהם, ומונח שכבר במילון. אל תחזיר יותר מהצעת term אחת לאותה מילה, ולא יותר משלוש בתשובה אחת.',
+    'מחשבות שנשמרו למועד הקרוב: ' + JSON.stringify(soon) + '. אם אחת מהן רלוונטית לשיחה, הזכר אותה ב-reply במשפט אחד. אל תמציא מחשבות שאינן ברשימה.',
+    'מחשבה למועד: כשנאמר משפט שהוא לקח או תובנה שכדאי להיזכר בה במועד עתידי חוזר — "שנה הבאה לזכור ש...", "תזכיר לי את זה בפעם הבאה ש...", "היה רעיון גרוע ללכת לשם בערב החג" — החזר הצעה מסוג thought. מלא anchor בתאריך של המועד עצמו בשנה הנוכחית (לא של השנה הבאה), occasion בשם המועד במילים, cal="heb" למועד עברי או לחג יהודי ו-"greg" לתאריך לועזי קבוע, ו-lead במספר הימים שצריך להתריע מראש. ברירת מחדל ל-lead היא 7.',
+    'אל תחזיר thought על בקשה רגילה לתזכורת בתאריך מסוים — זה event או task. thought הוא לקח שחוזר בכל שנה.',
     'כשיש התנגשות ביומן ציין זאת ב־why. הפרד בין חשוב לדחוף.',
     '',
     'החזר אך ורק אובייקט JSON תקין, בלי טקסט מסביב ובלי סימני קוד:',
@@ -611,7 +740,8 @@ function chat_(b) {
     'מטלה עם רשימה: כשהבקשה מכילה כמה דברים לעשות תחת כותרת אחת — קניות, ציוד לטיול, הכנות לאירוע — החזר מטלה אחת עם items, מערך של מחרוזות קצרות, ולא מטלה נפרדת לכל פריט. מטלה רגילה מחזירה items ריק.',
     ' {"type":"email_draft","to":"","subject":"...","body":"...","why":"..."},',
     ' {"type":"reminder","eventId":"המזהה מתוך רשימת האירועים","title":"שם האירוע כפי שהוא ביומן","start":"ISO של האירוע","minutes":[60],"why":"..."},',
-    ' {"type":"term","term":"המילה כפי שנאמרה","kind":"place|person|activity|other","guess":"ההשערה שלך, או ריק","why":"למה שאלת"}',
+    ' {"type":"term","term":"המילה כפי שנאמרה","kind":"place|person|activity|other","guess":"ההשערה שלך, או ריק","why":"למה שאלת"},',
+    ' {"type":"thought","text":"הלקח במילים שלו","occasion":"שם המועד","anchor":"YYYY-MM-DD של המועד השנה","cal":"heb|greg","lead":7,"why":"..."}',
     ']}',
     'אם אין פעולה להציע, proposals ריק.',
   ].join('\n');
@@ -758,7 +888,16 @@ function buildDigest_(ref) {
     lines.push('', 'פתוח ברשימה המשותפת:');
     shared.slice(0, 10).forEach(t => lines.push('  · ' + t.title + (t.author ? ' — ' + t.author : '')));
   }
-  lines.push('', 'לפני שסוגרים את היום: מה נסגר, ואיפה עצרת בכל כובע?');
+  // מחשבה שנשמרה בשנה שעברה חוזרת כאן, ימים ספורים לפני המועד שלה.
+  const due = dueThoughts_();
+  if (due.length) {
+    lines.push('', 'שווה להיזכר:');
+    due.forEach(function (t) {
+      const when = t.daysAway === 0 ? 'היום' : t.daysAway === 1 ? 'מחר' : 'בעוד ' + t.daysAway + ' ימים';
+      lines.push('  · ' + t.text + (t.occasion ? ' — ' + t.occasion : '') + ' (' + when + ')');
+    });
+  }
+  lines.push('', 'לפני שסוגרים את היום: מה נסגר, ואיפה עצרת?');
   return lines.join('\n');
 }
 
@@ -818,7 +957,9 @@ function clearDigestEvent_() {
 function dailyDigest() {
   const cfg = digestConfig_();
   if (cfg.channel === 'off') return;
-  if (cfg.channel === 'notify') { postDigestEvent_(nextAt_(cfg.hour)); return; }
+  // מסמנים רק אחרי מסירה בפועל, כדי שמחשבה לא תיחשב כנאמרה בגלל תצוגה מקדימה.
+  const said = dueThoughts_();
+  if (cfg.channel === 'notify') { postDigestEvent_(nextAt_(cfg.hour)); markSaid_(said); return; }
   const body = buildDigest_();
   const subject = 'העוזר — הלוז של מחר';
   const to = selfEmail_();
@@ -826,9 +967,11 @@ function dailyDigest() {
   if (cfg.channel === 'email') {
     // רק אל עצמך. הכתובת נלקחת מהחשבון ולא מגוף הבקשה, כדי שלא ניתן יהיה לשלוח לאף אחד אחר.
     MailApp.sendEmail(to, subject, body);
+    markSaid_(said);
     log_('digest', 'נשלח תקציר אל ' + to);
   } else {
     GmailApp.createDraft(to, subject, body);
+    markSaid_(said);
     log_('digest', 'נשמרה טיוטת תקציר');
   }
 }

@@ -456,6 +456,14 @@ details[open]>summary{border-bottom:1px solid var(--line)}
       </div>
     </div>
 
+    <h2>מחשבות למועד</h2>
+    <div class="card">
+      <div class="form">
+        <div id="thoughts"></div>
+        <div class="note">חוזרות בתקציר הערב, לפני המועד שלהן.</div>
+      </div>
+    </div>
+
     <h2>מה העוזר למד</h2>
     <div class="card">
       <div class="form">
@@ -559,7 +567,7 @@ const S = {
   cfg: load('cfg', DEFAULTS),
   tasks: load('tasks', []),
   log: load('log', []),
-  events: [], history: load('history', []), pending:{}, images:[], serverLog:null, terms:[],
+  events: [], history: load('history', []), pending:{}, images:[], serverLog:null, terms:[], thoughts:[],
 };
 let logSrc='local';
 function load(k,d){ try{ const v=JSON.parse(localStorage.getItem('assist:'+k)); return v==null? d : Object.assign(Array.isArray(d)?[]:{}, d, v);}catch(e){return d;} }
@@ -1094,6 +1102,13 @@ $('calendars').addEventListener('change',e=>{
 });
 $('calrefresh').addEventListener('click',refreshCalendars);
 // מחיקה מיידית ובלי אישור כפול: מונח שגוי הוא רעש, ולימוד מחדש הוא משפט אחד.
+$('thoughts').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-act="delthought"]'); if(!b) return;
+  const text=b.closest('.termrow').dataset.thought;
+  b.textContent='...';
+  try{ const r=await api('deleteThought',{text:text}); S.thoughts=r.thoughts||S.thoughts.filter(t=>t.text!==text); renderThoughts(); addLog('נמחקה מחשבה: '+text); }
+  catch(err){ b.textContent='×'; toast('לא נמחקה: '+err.message); }
+});
 $('terms').addEventListener('click',async e=>{
   const b=e.target.closest('[data-act="delterm"]'); if(!b) return;
   const row=b.closest('.termrow'); const term=row.dataset.term;
@@ -1207,6 +1222,7 @@ function renderSettings(){
   renderTags();
   renderCalendars();
   renderTerms();
+  renderThoughts();
   settingsReady=true;
 }
 function renderAll(){ renderHeader(); renderNow(); renderDayRail(); renderTasks(); renderWeek(); renderMonth(); renderLog(); }
@@ -1250,6 +1266,18 @@ async function loadTasks(){
 async function loadTerms(){
   if(demo()) return;
   try{ const r=await api('terms'); S.terms=r.terms||[]; renderTerms(); }catch(err){}
+}
+async function loadThoughts(){
+  if(demo()) return;
+  try{ const r=await api('thoughts'); S.thoughts=r.thoughts||[]; renderThoughts(); }catch(err){}
+}
+function renderThoughts(){
+  const box=$('thoughts'); if(!box) return;
+  if(demo()){ box.innerHTML='<div class="note">מצב הדגמה. צריך שרת מחובר.</div>'; return; }
+  if(!S.thoughts.length){ box.innerHTML='<div class="note">עדיין ריק. אמור לי מה כדאי לזכור לשנה הבאה.</div>'; return; }
+  box.innerHTML=S.thoughts.map(t=>`<div class="termrow" data-thought="${esc(t.text)}">`
+    +`<div class="t"><b>${esc(t.text)}</b><span>${esc(t.occasion||'')}${t.occasion?' · ':''}${esc(whenWords(t.next,t.lead))}</span></div>`
+    +`<button class="x" data-act="delthought" aria-label="מחק מחשבה">×</button></div>`).join('');
 }
 const TERM_KIND={place:'מקום',person:'אדם',activity:'חוג או פעילות',other:'אחר'};
 function renderTerms(){
@@ -1365,6 +1393,22 @@ function editForm(p){
       <label>רשימת פריטים, שורה לכל פריט<textarea data-e="items" rows="3" placeholder="למשל: חלב&#10;לחם&#10;ביצים">${esc((p.items||[]).map(x=>x.t).join(String.fromCharCode(10)))}</textarea></label>
     </div>`;
   }
+  if(p.type==='thought'){
+    const L=[[0,'ביום עצמו'],[3,'שלושה ימים לפני'],[7,'שבוע לפני'],[14,'שבועיים לפני'],[30,'חודש לפני']];
+    const lead=+p.lead||0;
+    return `<div class="edit" hidden>
+      <label>המחשבה<textarea data-e="text" rows="2">${esc(p.text||'')}</textarea></label>
+      <label>המועד<input type="text" data-e="occasion" value="${esc(p.occasion||'')}" placeholder="למשל: ערב ראש השנה"></label>
+      <div class="r">
+        <label>התאריך השנה<input type="date" data-e="anchor" value="${esc(p.anchor||'')}"></label>
+        <label>לוח<select data-e="cal">
+          <option value="heb" ${p.cal==='heb'?'selected':''}>עברי, נודד בכל שנה</option>
+          <option value="greg" ${p.cal!=='heb'?'selected':''}>לועזי, תאריך קבוע</option>
+        </select></label>
+      </div>
+      <label>מתי להזכיר<select data-e="lead">${L.map(o=>`<option value="${o[0]}" ${o[0]===lead?'selected':''}>${o[1]}</option>`).join('')}</select></label>
+    </div>`;
+  }
   if(p.type==='term'){
     const k=p.kind||'other';
     return `<div class="edit" hidden>
@@ -1420,6 +1464,55 @@ function refreshProp(el,p){
   if(lbl) lbl.textContent=((p.tags||[]).length||(p.people||[]).length)?'שויך אל':'למי זה שייך?';
   updateDest(el,p); untilQuestion(el,p);
 }
+// מחשבה תלוית זמן: לקח שחוזר בכל שנה במועד שלו. אותו חישוב שרץ בשרת רץ גם כאן,
+// כדי שהכרטיס יוכל לומר מתי היא באמת תופיע, ולא רק שהיא נשמרה.
+function hebOf(d){
+  try{
+    const f=new Intl.DateTimeFormat('en-u-ca-hebrew',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
+    const p={}; for(const x of f.formatToParts(d)) p[x.type]=x.value;
+    if(!p.month||!p.day) return null;
+    return {m:p.month,d:+p.day};
+  }catch(e){ return null; }
+}
+const dayUTC=iso=>new Date(String(iso||'').slice(0,10)+'T12:00:00Z');
+const ymdUTC=d=>d.toISOString().slice(0,10);
+function nextHeb(month,day,fromIso){
+  const from=dayUTC(fromIso); let left=false,matched=false,last=null;
+  for(let add=1;add<=400;add++){
+    const c=new Date(from.getTime()+add*86400000); const h=hebOf(c); if(!h) return null;
+    const same=h.m===month||h.m.indexOf(month)===0;
+    if(!same){ left=true; if(matched) break; continue; }
+    if(!left) continue;
+    matched=true; last=c;
+    if(h.d===day) return ymdUTC(c);
+  }
+  return last?ymdUTC(last):null;
+}
+function nextGreg(anchorIso,fromIso){
+  const a=dayUTC(anchorIso), from=dayUTC(fromIso);
+  for(let y=from.getUTCFullYear(); y<=from.getUTCFullYear()+2; y++){
+    const c=new Date(Date.UTC(y,a.getUTCMonth(),a.getUTCDate(),12));
+    if(c>from) return ymdUTC(c);
+  }
+  return null;
+}
+function nextOccurrence(t){
+  if(!t||!t.anchor) return null;
+  const from=ymd(new Date());
+  if(t.cal==='heb'){ const h=hebOf(dayUTC(t.anchor)); if(h) return nextHeb(h.m,h.d,from); }
+  return nextGreg(t.anchor,from);
+}
+// "ב-1 באוקטובר 2027, בעוד שנה ושלושה שבועות" אומר יותר מתאריך לבדו.
+function whenWords(iso,lead){
+  if(!iso) return 'לא הצלחתי לחשב את המועד';
+  const d=new Date(iso+'T00:00:00');
+  const days=Math.round((dayUTC(iso)-dayUTC(ymd(new Date())))/86400000);
+  const at=d.getDate()+' ב'+HE_MONTHS[d.getMonth()]+' '+d.getFullYear();
+  // "בעוד 1.1 שנים" הוא מספר, לא זמן. שנה היא שנה.
+  const inn=days<0?'':days===0?'היום':days===1?'מחר':days<30?('בעוד '+days+' ימים')
+    :days<330?('בעוד כ-'+Math.round(days/30)+' חודשים'):days<400?'בעוד כשנה':('בעוד כ-'+Math.round(days/365)+' שנים');
+  return at+(inn?' · '+inn:'')+' · תופיע '+(lead?lead+' ימים לפני':'ביום עצמו');
+}
 function describe(p){
   if(p.type==='event'){const s=new Date(p.start),e=new Date(p.end);return {kind:'פגישה ביומן',title:p.title,meta:`יום ${HE_DAYS[s.getDay()]} ${s.getDate()}.${s.getMonth()+1} · ${hhmm(s)}–${hhmm(e)}${p.location?' · '+p.location:''} · ${remindWords(remindFor(p))}`};}
   if(p.type==='task') return {kind:'מטלה',title:p.title,meta:(p.importance==='high'?'חשוב · ':'')+(p.mit?'מהותית להיום · ':'')+(p.due?'עד '+p.due:'')+(p.remindAt?' · תזכורת ביומן ב־'+p.remindAt:'')+((p.items||[]).length?' · '+p.items.length+' פריטים':'')};
@@ -1428,6 +1521,8 @@ function describe(p){
     return {kind:'תזכורת לאירוע קיים',title:p.title||'אירוע',
       meta:(d&&!isNaN(d)?`יום ${HE_DAYS[d.getDay()]} ${d.getDate()}.${d.getMonth()+1} · ${hhmm(d)} · `:'')+remindWords(p.minutes)};
   }
+  if(p.type==='thought') return {kind:'מחשבה למועד',title:p.text||'',
+    meta:(p.occasion?p.occasion+' · ':'')+whenWords(nextOccurrence(p),+p.lead||0)};
   if(p.type==='term') return {kind:'מילה שלא הכרתי',title:p.term||'',
     meta:p.meaning?p.meaning:(p.guess?('ניחשתי: '+p.guess+'. לתקן אם לא מדויק.'):'מה זה? אחרי שתסביר, לא אשאל שוב.')};
   if(p.type==='email_draft') return {kind:'טיוטת מייל (לא נשלחת)',title:p.subject||'ללא נושא',meta:(p.to?'אל: '+p.to+'\n':'')+(p.body||'')};
@@ -1446,7 +1541,7 @@ function addProposal(p){
   const id='p'+Date.now()+Math.random().toString(36).slice(2,6);
   // ניחוש רק כשלא נאמר במפורש שזה פרטי. "תכניס לי" הוא החלטה, לא חוסר מידע.
   p.tags=normTags(p.tags);
-  if(p.type==='term'){ p.tags=[]; p.shared=false; }
+  if(p.type==='term'||p.type==='thought'){ p.tags=[]; p.shared=false; }
   else if(!p.tags.length && p.shared!==false) p.tags=guessTags((p.title||'')+' '+(p.body||''));
   // סדרה בלי סוף אינה ניתנת לאישור, ולכן הכרטיס שואל עד מתי במקום להיתקע.
   // השאלה נשאלת ואינה מוכרעת לבד: תאריך סיום הוא החלטה, לא השלמה טכנית.
@@ -1458,7 +1553,7 @@ function addProposal(p){
   const h=accentOf(p); const d=describe(p);
   const el=document.createElement('div'); el.className='prop'; el.style.setProperty('--hat',h.color); el.dataset.id=id;
   // למונח אין בעלים ואין פרטי או משותף. הוא מילה במילון, לא פריט ביומן.
-  const isTerm=p.type==='term';
+  const isTerm=p.type==='term'||p.type==='thought';
   const canShare=p.type!=='email_draft'&&!isTerm;
   el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}${h.name?' · ':''}${esc(d.kind)}</div>
     <div class="pt">${esc(d.title)}${repChip(p)}${tagChips(p.tags)}</div><div class="pm">${esc(d.meta)}</div>
@@ -1547,6 +1642,13 @@ async function approve(id,el){
       const r=await api('remindEvent',{id:p.eventId,calendarId:p.calendarId||'',reminders:(p.minutes&&p.minutes.length)?p.minutes:[60]});
       addLog('נוספה תזכורת ל'+(r.title||p.title||'אירוע')+': '+remindWords(p.minutes),{by:'באישורך'});
       await loadAgenda();
+    } else if(p.type==='thought'){
+      const txt=String(p.text||'').trim();
+      if(!txt){ st.textContent='כתוב את המחשבה לפני השמירה.'; return; }
+      if(!p.anchor){ st.textContent='צריך תאריך למועד.'; const f=el.querySelector('[data-e="anchor"]'); if(f) f.focus(); return; }
+      const r=await api('addThought',{text:txt,occasion:p.occasion||'',anchor:p.anchor,cal:p.cal||'greg',lead:+p.lead||0});
+      if(r.thoughts) S.thoughts=r.thoughts; renderThoughts();
+      addLog('נשמרה מחשבה ל'+(p.occasion||p.anchor)+': '+txt,{by:'באישורך'});
     } else if(p.type==='term'){
       const meaning=String(p.meaning||p.guess||'').trim();
       // בלי פירוש אין מה לשמור, וניחוש של המנוע אינו תשובה שלך.
@@ -1888,6 +1990,7 @@ function spokenCard(p){
       +(d&&!isNaN(d)?'. יום '+HE_DAYS[d.getDay()]+', '+d.getDate()+' ב'+HE_MONTHS[d.getMonth()]+', בשעה '+hhmm(d):'')
       +(extraRemind(p.minutes).length?'. '+remindWords(extraRemind(p.minutes)):'');
   }
+  if(p.type==='thought') return 'מחשבה למועד. '+(p.text||'')+'. '+(p.occasion?'ב'+p.occasion+'. ':'')+'אזכיר לך '+((+p.lead||0)?(+p.lead)+' ימים לפני':'ביום עצמו')+'.';
   if(p.type==='term') return 'לא הכרתי את '+(p.term||'')+'.';
   if(p.type==='email_draft') return 'טיוטת מייל. '+(p.subject||'ללא נושא');
   return describe(p).title;
@@ -1978,6 +2081,7 @@ $('msgs').addEventListener('input',e=>{
   const k=f.dataset.e;
   if(k==='kind'){ convertProposal(el,p,f.value); return; }
   if(k==='tkind'){ p.kind=f.value; return; }
+  if(k==='lead'){ p.lead=+f.value; refreshProp(el,p); return; }
   if(k==='remind'||k==='minutes'){
     const v=Number(f.value);
     p[k]= v<0 ? [] : [v];
@@ -2176,7 +2280,7 @@ $('test').addEventListener('click',async()=>{
       j.sharedSheet?'רשימה משותפת: כן':'רשימה משותפת: לא מוגדרת',
       j.secured?'מוגן בסוד':'לא מוגן — כל מי שמכיר את הכתובת יכול לכתוב',d].filter(Boolean).join(' · ');
     toast('מחובר. הכתובת והסוד נשמרו במכשיר.');
-    loadAgenda(); loadTasks(); loadTerms();
+    loadAgenda(); loadTasks(); loadTerms(); loadThoughts();
   }catch(err){$('connstat').textContent='לא מחובר: '+err.message;}
 });
 
@@ -2206,7 +2310,7 @@ $('who').addEventListener('click',e=>{const b=e.target.closest('button[data-p]')
 
 /* ===================== התחלה ===================== */
 if(!S.cfg.profile) $('who').hidden=false;
-renderAll(); setupSpeech(); loadAgenda(); loadTasks(); loadTerms(); pickupShared();
+renderAll(); setupSpeech(); loadAgenda(); loadTasks(); loadTerms(); loadThoughts(); pickupShared();
 // הקישור בתיאור אירוע ההתראה נכנס ישר למסך הלוז
 // הקישור מאירוע ההתראה מגיע עם digest בכתובת. מסירים אותו מיד אחרי הפתיחה,
 // אחרת כל טעינה מחדש פותחת שוב את הדף והמשתמש נעול בו.
@@ -2227,7 +2331,7 @@ setInterval(()=>{renderHeader();renderNow();renderDayRail();},60000);
 // בלי זה מטלה שבן או בת הזוג הוסיפו לא מופיעה עד רענון של הדף
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){ cancelAutoSend(); driveStop(); stopMic(); return; }
-  loadAgenda(); loadTasks(); loadTerms(); if(logSrc==='server') loadServerLog();
+  loadAgenda(); loadTasks(); loadTerms(); loadThoughts(); if(logSrc==='server') loadServerLog();
 });
 // הכיתוב נמחק ברגע שמתחברים. קודם הוא נקבע פעם אחת בטעינה ונשאר תקוע גם אחרי חיבור.
 // הפלטה נקראת מגוגל ולא נשמרת בקוד, כדי שלא תתיישן אם גוגל ישנה אותה.
