@@ -1774,7 +1774,10 @@ async function send(text){
     if(r.reply) addMsg(r.reply,'ai');
     if(r.warning) addRetry(r.warning,text,imgs);
     const cards=(r.proposals||[]).map(addProposal).filter(Boolean);
-    S.history.push({role:'user',content:text||'(תמונה)'},{role:'assistant',content:r.reply||''}); S.history=S.history.slice(-20); save('history',S.history);
+    // תשובה ריקה אינה נכנסת להיסטוריה. השרת מסנן הודעה בלי תוכן, וכך נשארו
+    // שתי פניות משתמש רצופות בלי תשובה ביניהן — היסטוריה שמלמדת את המנוע
+    // שמותר לא לענות. שיחה שלא הניבה דבר פשוט לא נרשמת.
+    if(r.reply){ S.history.push({role:'user',content:text||'(תמונה)'},{role:'assistant',content:r.reply}); S.history=S.history.slice(-20); save('history',S.history); }
     if(driveOn()) await driveReview(r,cards,text);
   }catch(err){ thinking.remove(); addMsg('לא הצלחתי לדבר עם השרת: '+err.message,'sys'); }
 }
