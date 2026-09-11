@@ -398,9 +398,8 @@ details[open]>summary{border-bottom:1px solid var(--line)}
     <div class="card">
       <div class="form">
         <div id="calendars"></div>
-        <div class="note">מחיקת יומן מוחקת גם את כל האירועים שבו, בלי דרך חזרה.</div>
+        <div class="note">מחיקת יומן מוחקת גם את האירועים שבו.</div>
         <button class="btn ghost" id="calrefresh">רענן רשימה</button>
-        <div class="note">כל היומנים משותפים ביניכם, חוץ מהאישי.</div>
       </div>
     </div>
 
@@ -444,7 +443,7 @@ details[open]>summary{border-bottom:1px solid var(--line)}
           <option value="0">כבוי</option>
           <option value="1">דלוק — שליחה, הקראה ואישור בקול</option>
         </select>
-        <div class="note">אפשר להדליק אותו לנסיעה אחת בלי לשנות כאן: לפתוח שיחה ולומר "אני בנהיגה". "סיימתי לנהוג" מכבה, וגם סגירת האפליקציה.</div>
+        <div class="note">אפשר גם לומר בשיחה "אני בנהיגה".</div>
         <label for="openmode">כשהאפליקציה נפתחת</label>
         <select id="openmode">
           <option value="now">מסך היום</option>
@@ -452,7 +451,6 @@ details[open]>summary{border-bottom:1px solid var(--line)}
         </select>
         <button class="btn ghost" id="reclink">העתק קישור שפותח הקלטה</button>
         <div class="status" id="recstat"></div>
-        <div class="note">לחיצה ארוכה על כפתור הכיבוי שמורה לעוזר של המערכת, ואפליקציית אינטרנט אינה יכולה לתפוס אותה. בסמסונג אפשר לשייך לחיצה כפולה על כפתור הצד לאפליקציה הזאת. אחרת: לחיצה ארוכה על האייקון, או קיצור עם הכתובת שלמעלה.</div>
       </div>
     </div>
 
@@ -460,7 +458,7 @@ details[open]>summary{border-bottom:1px solid var(--line)}
     <div class="card">
       <div class="form">
         <div id="terms"></div>
-        <div class="note">מילים שלימדת אותו כשלא הכיר אותן. נשמרות בגיליון המשותף, ולכן מספיק ללמד פעם אחת משני הטלפונים.</div>
+        <div class="note">משותף לשני הטלפונים.</div>
       </div>
     </div>
 
@@ -784,8 +782,18 @@ function guessTags(text,calendarId,calendarName){
 function normTags(list){ return (list||[]).map(x=>tagOf(x)?x:(tagByName(x)||{}).key).filter(Boolean); }
 function tagChips(keys){ return (keys||[]).map(k=>{const tg=tagOf(k);if(!tg) return '';const col=tagColor(tg);return `<span class="tag" style="${hatVars(col).replace(/--hat/g,'--tag')};--tag-ink:${safeOn(col,SURF_LIGHT)}">${esc(tg.name)}</span>`;}).join(''); }
 function sharedChip(x){ return x.shared ? `<span class="shared">${SHARE_ICON}${x.author&&x.author!==S.cfg.me?esc(x.author):'משותף'}</span>` : ''; }
-let filterTag=null;
-const passFilter=keys=>!filterTag||(keys||[]).includes(filterTag);
+// הסינון היה על הילדים בלבד, ולכן יומן המשפחה, המילואים והיומן האישי לא הופיעו בו
+// ואירוע שלהם נעלם ברגע שנבחר סינון כלשהו. עכשיו הבורר בנוי מהיומנים עצמם,
+// ונוסף עליהם ילד שאין לו יומן משלו — כי מטלה אינה יושבת ביומן.
+let filterSel=null;   // {t:'cal'|'tag', id}
+function passFilter(x){
+  if(!filterSel) return true;
+  const keys=(x&&x.tags)||[];
+  if(filterSel.t==='tag') return keys.includes(filterSel.id);
+  if(x&&x.calendarId) return x.calendarId===filterSel.id;
+  // מטלה אינה ביומן, ולכן היא נספרת ליומן של הילד שהיא שייכת אליו.
+  return keys.some(k=>{ const tg=tagOf(k); return tg&&tg.calendarId===filterSel.id; });
+}
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2400); }
 
 /* ===================== שרת ===================== */
@@ -934,8 +942,8 @@ function taskRow(t){
 }
 function renderTasks(){
   const today=ymd(new Date());
-  const mits=S.tasks.filter(t=>t.mit&&!t.done&&passFilter(t.tags));
-  const rest=S.tasks.filter(t=>!t.mit&&(!t.done||t.done===today)&&passFilter(t.tags));
+  const mits=S.tasks.filter(t=>t.mit&&!t.done&&passFilter(t));
+  const rest=S.tasks.filter(t=>!t.mit&&(!t.done||t.done===today)&&passFilter(t));
   renderFilter();
   $('mits').innerHTML=mits.length?mits.map(taskRow).join(''):`<div class="empty"><b>עדיין לא נבחרו</b>${T().mitsEmpty}</div>`;
   $('tasks').innerHTML=rest.length?rest.map(taskRow).join('')
@@ -943,13 +951,20 @@ function renderTasks(){
               :`<div class="empty"><b>אין מטלות פתוחות</b>${T().tasksEmpty}</div>`);
 }
 function renderFilter(){
-  $('filter').innerHTML=!S.cfg.tags.length?'':`<button data-tag="" aria-pressed="${!filterTag}">הכל</button>`+S.cfg.tags.map(t=>`<button data-tag="${t.key}" aria-pressed="${filterTag===t.key}" style="--tag:${t.color}"><i></i>${esc(t.name)}</button>`).join('');
+  const cals=S.cfg.calendars||[];
+  const loose=(S.cfg.tags||[]).filter(t=>!t.calendarId&&t.name);
+  if(!cals.length&&!loose.length){ $('filter').innerHTML=''; return; }
+  const on=(t,id)=>!!filterSel&&filterSel.t===t&&filterSel.id===id;
+  const chip=(t,id,name,color)=>`<button data-f="${t}" data-id="${esc(id)}" aria-pressed="${on(t,id)}" style="--tag:${safeOn(color||'#8A8F95',SURF_LIGHT)}"><i></i>${esc(name)}</button>`;
+  $('filter').innerHTML=`<button data-f="" aria-pressed="${!filterSel}">הכל</button>`
+    +cals.map(c=>chip('cal',c.id,c.name,c.color)).join('')
+    +loose.map(t=>chip('tag',t.key,t.name,tagColor(t))).join('');
 }
 function renderWeek(){
   const start=new Date(); start.setHours(0,0,0,0); let html='';
   for(let i=0;i<7;i++){
     const d=new Date(start); d.setDate(d.getDate()+i);
-    const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e.tags)).sort((a,b)=>new Date(a.start)-new Date(b.start));
+    const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e)).sort((a,b)=>new Date(a.start)-new Date(b.start));
     html+=`<div class="dayhead ${i===0?'today':''}">${i===0?'היום':'יום '+HE_DAYS[d.getDay()]} · ${d.getDate()}.${d.getMonth()+1}</div>`;
     html+=evs.length?evs.map(e=>{const h=accentOf(e);return `<div class="ev" style="${hatVars(h.color)}"><div class="time">${hhmm(new Date(e.start))}<br>${hhmm(new Date(e.end))}</div><div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>${e.location?`<div class="loc">${esc(e.location)}</div>`:''}</div></div>`;}).join('')
       :`<div class="ev" style="--hat:transparent"><div class="time"></div><div class="loc">פנוי</div></div>`;
@@ -963,8 +978,8 @@ function renderMonth(){
   for(let i=0;i<startOff;i++) html+=`<div class="d other"></div>`;
   for(let n=1;n<=days;n++){
     const d=new Date(now.getFullYear(),now.getMonth(),n);
-    const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e.tags));
-    const cols=[...new Set(evs.map(e=>filterTag?tagOf(filterTag).color:accentOf(e).color))].slice(0,3);
+    const evs=S.events.filter(e=>ymd(new Date(e.start))===ymd(d)&&passFilter(e));
+    const cols=[...new Set(evs.map(e=>accentOf(e).color))].slice(0,3);
     const sel = monthSel===ymd(d) ? ' sel' : '';
     html+=`<button class="d${sel} ${ymd(d)===ymd(now)?'today':''} ${evs.length?'hatday':''}" data-day="${ymd(d)}" aria-pressed="${!!sel}" style="--load:${Math.min(4,evs.length)}"><span class="n">${n}</span><span class="dots">${cols.map(c=>`<i style="${hatVars(c)}"></i>`).join('')}</span></button>`;
   }
@@ -972,7 +987,7 @@ function renderMonth(){
   // הרשת לבדה אינה מספיקה: בתא של 45 פיקסל אין מקום לכותרת אירוע.
   // לכן לחיצה על יום פותחת את האירועים שלו מתחת, כמו ביומני נייד.
   const dsel = monthSel ? new Date(monthSel+'T00:00:00') : now;
-  const list = S.events.filter(e=>ymd(new Date(e.start))===ymd(dsel)&&passFilter(e.tags))
+  const list = S.events.filter(e=>ymd(new Date(e.start))===ymd(dsel)&&passFilter(e))
                        .sort((a,b)=>new Date(a.start)-new Date(b.start));
   html += `<div class="dayhead ${ymd(dsel)===ymd(now)?'today':''}">${ymd(dsel)===ymd(now)?'היום':'יום '+HE_DAYS[dsel.getDay()]} · ${dsel.getDate()}.${dsel.getMonth()+1}</div>`;
   html += list.length ? list.map(e=>{
@@ -1018,7 +1033,7 @@ function calOptions(sel){ const cals=S.cfg.calendars||[]; return `<option value=
 function renderCalendars(){
   const box=$('calendars'); if(!box) return;
   const cals=S.cfg.calendars||[];
-  if(!cals.length){ box.innerHTML='<div class="note">אין רשימה עדיין. התחברו לשרת ולחצו "רענן רשימה".</div>'; return; }
+  if(!cals.length){ box.innerHTML='<div class="note">אין רשימה. לחצו "רענן רשימה".</div>'; return; }
   const pal=S.cfg.palette||[];
   box.innerHTML=cals.map(c=>{
     const col=c.color||'#8A8F95';
@@ -1039,6 +1054,7 @@ function renderCalendars(){
 }
 async function refreshCalendars(){
   if(demo()){ toast('מצב הדגמה — צריך שרת מחובר.'); return; }
+  collectSettings();
   try{ const r=await api('calendars'); if(r.calendars){ S.cfg.calendars=r.calendars; save('cfg',S.cfg); renderCalendars(); renderTags(); toast('הרשימה עודכנה.'); } }
   catch(err){ toast('לא הצלחתי לקרוא: '+err.message); }
 }
@@ -1048,6 +1064,13 @@ $('reclink').addEventListener('click',async()=>{
   try{ await navigator.clipboard.writeText(u); $('recstat').textContent='הועתק. הדביקו אותו בקיצור בטלפון.'; }
   catch(e){ $('recstat').textContent=u; }
 });
+// כל שינוי במסך ההגדרות נשמר מיד. כפתור "שמור" נשאר, אבל אי אפשר יותר לאבד
+// הקלדה בגלל מעבר מסך, מעבר לרקע, או בנייה מחדש שרצה ברקע.
+let saveT=null;
+$('tab-settings').addEventListener('change',collectSettings);
+$('tab-settings').addEventListener('input',()=>{ clearTimeout(saveT); saveT=setTimeout(collectSettings,600); });
+// יציאה מהמסך או מהאפליקציה שומרת מיד, בלי לחכות להשהיה.
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) collectSettings(); });
 $('calrefresh').addEventListener('click',refreshCalendars);
 // מחיקה מיידית ובלי אישור כפול: מונח שגוי הוא רעש, ולימוד מחדש הוא משפט אחד.
 $('terms').addEventListener('click',async e=>{
@@ -1134,7 +1157,21 @@ function gradeOf(dob){
 }
 function readTagsFromForm(){
   return [...document.querySelectorAll('#tags .tagrow')].map((row,i)=>{const old=S.cfg.tags[i]||{};const name=row.querySelector('[data-f=name]').value.trim();
-    return {key:old.key||('t'+Date.now()+i),name:name||old.name||'ללא שם',color:row.dataset.color||(row.querySelector('input[type=color]')||{}).value||old.color||'#4986e7',aliases:row.querySelector('[data-f=aliases]').value.split(',').map(s=>s.trim()).filter(Boolean),dob:row.querySelector('[data-f=dob]').value||'',calendarId:row.querySelector('[data-f=cal]').value};});
+    return {key:old.key||('t'+Date.now()+i),name:name||old.name||'',color:row.dataset.color||(row.querySelector('input[type=color]')||{}).value||old.color||'#4986e7',aliases:row.querySelector('[data-f=aliases]').value.split(',').map(s=>s.trim()).filter(Boolean),dob:row.querySelector('[data-f=dob]').value||'',calendarId:row.querySelector('[data-f=cal]').value};});
+}
+// ההגדרות נשמרות תוך כדי הקלדה, ולא רק בכפתור. שלוש פעולות בנו מחדש את רשימת
+// הילדים מהמצב השמור — טעינת פלטת הצבעים, רענון היומנים ויצירת יומן משפחה —
+// ומחקו בשקט כל מה שהוקלד ועוד לא נשמר. טעינת הפלטה רצה לבדה בכל התחברות.
+let settingsReady=false;
+function collectSettings(){
+  if(!settingsReady||!document.querySelector('#tags')) return;
+  S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value;
+  S.cfg.partnerName=$('pname').value.trim(); S.cfg.familyCalendarId=$('famcal').value;
+  S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value;
+  S.cfg.openMode=$('openmode').value; S.cfg.drive=$('drive').value==='1';
+  S.cfg.remind=$('remind').value; S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
+  S.cfg.tags=readTagsFromForm();
+  save('cfg',S.cfg);
 }
 function renderSettings(){
   renderInstall();
@@ -1146,6 +1183,7 @@ function renderSettings(){
   renderTags();
   renderCalendars();
   renderTerms();
+  settingsReady=true;
 }
 function renderAll(){ renderHeader(); renderNow(); renderDayRail(); renderTasks(); renderWeek(); renderMonth(); renderLog(); }
 
@@ -1193,7 +1231,7 @@ const TERM_KIND={place:'מקום',person:'אדם',activity:'חוג או פעיל
 function renderTerms(){
   const box=$('terms'); if(!box) return;
   if(demo()){ box.innerHTML='<div class="note">מצב הדגמה. צריך שרת מחובר.</div>'; return; }
-  if(!S.terms.length){ box.innerHTML='<div class="note">עדיין לא לימדת אותו כלום. כשהוא ייתקל במילה שאינו מכיר, הוא ישאל.</div>'; return; }
+  if(!S.terms.length){ box.innerHTML='<div class="note">עדיין ריק. הוא ישאל כשייתקל במילה שאינו מכיר.</div>'; return; }
   box.innerHTML=S.terms.map(t=>`<div class="termrow" data-term="${esc(t.term)}">`
     +`<div class="t"><b>${esc(t.term)}</b><span>${esc(t.meaning)}${t.kind?' · '+esc(TERM_KIND[t.kind]||t.kind):''}${t.author?' · '+esc(t.author):''}</span></div>`
     +`<button class="x" data-act="delterm" aria-label="מחק מונח">×</button></div>`).join('');
@@ -1403,7 +1441,7 @@ function addProposal(p){
     ${p.why?`<div class="why">${esc(p.why)}</div>`:''}
     ${isTerm?'':`<div class="who4">
       <span class="lbl">${((p.tags||[]).length||(p.people||[]).length)?'שויך אל':'למי זה שייך?'}</span>
-      ${(S.cfg.tags||[]).map(t=>`<button class="kid" data-kid="${esc(t.key)}" aria-pressed="${(p.tags||[]).includes(t.key)}" style="${hatVars(tagColor(t)).replace(/--hat/g,'--tag')}">${esc(t.name)}${ageOf(t.dob)!==null?' · '+ageOf(t.dob):''}</button>`).join('')}
+      ${(S.cfg.tags||[]).filter(t=>t.name).map(t=>`<button class="kid" data-kid="${esc(t.key)}" aria-pressed="${(p.tags||[]).includes(t.key)}" style="${hatVars(tagColor(t)).replace(/--hat/g,'--tag')}">${esc(t.name)}${ageOf(t.dob)!==null?' · '+ageOf(t.dob):''}</button>`).join('')}
       ${peopleNames().map(n=>`<button class="grown" data-who="${esc(n)}" aria-pressed="${(p.people||[]).includes(n)}">${esc(n)}</button>`).join('')}
     </div>`}
     ${canShare?`<div class="vis"><button data-vis="0" aria-pressed="${!p.shared}">${LOCK_ICON}פרטי</button><button data-vis="1" aria-pressed="${p.shared}">${SHARE_ICON}משותף</button><span class="status dest"></span></div>`:''}
@@ -1997,7 +2035,11 @@ function showTab(name){
   if(name==='log') renderLog();
 }
 document.querySelectorAll('[role=tab]').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
-$('filter').addEventListener('click',e=>{const b=e.target.closest('button[data-tag]');if(!b)return;filterTag=b.dataset.tag||null;renderTasks();renderWeek();renderMonth();});
+$('filter').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-f]'); if(!b) return;
+  filterSel=b.dataset.f?{t:b.dataset.f,id:b.dataset.id}:null;
+  renderTasks(); renderWeek(); renderMonth();
+});
 
 let pressT=null;
 ['mits','tasks'].forEach(id=>{
@@ -2054,9 +2096,9 @@ $('digesttest').addEventListener('click',async()=>{
 });
 
 $('save').addEventListener('click',()=>{
-  S.cfg.me=$('me').value.trim()||S.cfg.me; S.cfg.gender=$('gender').value; S.cfg.url=$('url').value.trim(); S.cfg.mitmax=+$('mitmax').value; S.cfg.voicelang=$('voicelang').value; S.cfg.openMode=$('openmode').value; S.cfg.drive=$('drive').value==='1'; S.cfg.familyCalendarId=$('famcal').value;
-  S.cfg.secret=$('secret').value.trim(); S.cfg.remind=$('remind').value; S.cfg.partnerName=$('pname').value.trim(); S.cfg.digestChannel=$('digestch').value; S.cfg.digestHour=+$('digesth').value;
-  S.cfg.tags=readTagsFromForm(); if(filterTag&&!tagOf(filterTag)) filterTag=null;
+  collectSettings();
+  S.cfg.url=$('url').value.trim(); S.cfg.secret=$('secret').value.trim();
+  if(filterSel&&filterSel.t==='tag'&&!tagOf(filterSel.id)) filterSel=null;
   save('cfg',S.cfg); $('savestat').textContent='נשמר.'; toast('ההגדרות נשמרו.'); renderHint(); renderAll(); if(rec)rec.lang=S.cfg.voicelang; loadAgenda(); loadTasks();
 });
 $('tags').addEventListener('click',async e=>{
@@ -2088,6 +2130,7 @@ $('tags').addEventListener('click',async e=>{
   }
 });
 $('mkfam').addEventListener('click',async e=>{
+  collectSettings();
   e.target.textContent='יוצר...';
   try{const r=await api('createCalendar',{name:'משפחה',color:(S.cfg.palette||[]).includes('#ff7537')?'#ff7537':'#C97B2A'});S.cfg.familyCalendarId=r.id;(S.cfg.calendars=S.cfg.calendars||[]).push({id:r.id,name:'משפחה'});save('cfg',S.cfg);renderTags();addLog('נוצר יומן משפחתי בגוגל');toast('נוצר יומן משפחה. עכשיו לשתף אותו מיומן גוגל עם החשבון השני.');}
   catch(err){toast('לא נוצר: '+err.message);}
@@ -2101,7 +2144,7 @@ $('test').addEventListener('click',async()=>{
     if(j.secretRequired){$('connstat').textContent='השרת מוגן והסוד לא תואם. העתיקו את APP_SECRET מיומן ההרצה של setup.';return;}
     if(!j.ok){$('connstat').textContent='השרת ענה אבל לא כמו שצריך'+(j.error?': '+j.error:'.');return;}
     S.cfg.url=url; S.cfg.secret=$('secret').value.trim(); save('cfg',S.cfg); renderHint();
-    if(j.calendars){S.cfg.calendars=j.calendars;save('cfg',S.cfg);renderTags();}
+    if(j.calendars){collectSettings();S.cfg.calendars=j.calendars;save('cfg',S.cfg);renderTags();}
     loadPalette();
     if(j.digest){S.cfg.digestChannel=j.digest.channel;S.cfg.digestHour=j.digest.hour;save('cfg',S.cfg);$('digestch').value=j.digest.channel;$('digesth').value=j.digest.hour;}
     const d=j.digest&&j.digest.channel!=='off'&&j.digest.installed?'תקציר ערב: '+pad(j.digest.hour)+':00':'תקציר ערב: כבוי';
@@ -2167,7 +2210,7 @@ document.addEventListener('visibilitychange',()=>{
 async function loadPalette(){
   if(demo()) return;
   try{ const r=await api('colors'); const list=(r.colors||[]).map(c=>c.bg).filter(Boolean);
-       if(list.length){ S.cfg.palette=list; save('cfg',S.cfg); renderTags(); } }
+       if(list.length){ collectSettings(); S.cfg.palette=list; save('cfg',S.cfg); renderTags(); } }
   catch(err){ /* בלי פלטה נשארים עם הבורר החופשי */ }
 }
 function renderHint(){ $('hint').textContent = demo() ? 'מצב הדגמה — לחבר את השרת בהגדרות.' : ''; }
