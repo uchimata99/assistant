@@ -234,9 +234,6 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .prop .clash{margin-top:8px;padding:9px 11px;border-radius:10px;background:color-mix(in srgb,var(--warn) 14%,var(--card));border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);font-size:var(--fs-2);color:var(--ink)}
 .prop .clash:empty{display:none}
 .prop .clash b{color:var(--warn)}
-.prop .clash .slots{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
-.prop .clash .slots button{padding:8px 13px;border-radius:999px;background:var(--card);border:1px solid var(--line-2);color:var(--ink);font-size:var(--fs-2);min-height:40px;font-weight:600}
-.prop .clash .slots .lbl{font-size:var(--fs-2);color:var(--ink-2);align-self:center;margin-inline-end:2px}
 .prop .untilq{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .prop .untilq:empty{display:none}
 .termrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -1600,47 +1597,12 @@ function clashWords(list){
     return x.title+' '+hhmm(new Date(x.start))+'-'+hhmm(new Date(x.end))+(who?' · '+who:'');
   }).join(', ');
 }
-// חלונות פנויים ביום של האירוע, בין שבע בבוקר לעשר בערב, מול כל היומנים המוצגים.
-// חופפים מאוחדים קודם, אחרת שני אירועים שנוגעים זה בזה היו יוצרים רווח מדומה.
-const DAY_FROM=7, DAY_TO=22;
-function freeStarts(p){
-  const s0=new Date(p.start), e0=new Date(p.end);
-  if(isNaN(s0)||isNaN(e0)) return [];
-  const dur=Math.max(9e5, e0-s0);
-  const from=new Date(s0); from.setHours(DAY_FROM,0,0,0);
-  const to=new Date(s0); to.setHours(DAY_TO,0,0,0);
-  const busy=shownEvents().filter(x=>ymd(new Date(x.start))===ymd(s0))
-    .map(x=>({s:new Date(x.start),e:new Date(x.end)}))
-    .filter(x=>!isNaN(x.s)&&!isNaN(x.e)).sort((a,b)=>a.s-b.s);
-  const merged=[];
-  busy.forEach(b=>{ const last=merged[merged.length-1];
-    if(last&&b.s<=last.e){ if(b.e>last.e) last.e=new Date(b.e); } else merged.push({s:new Date(b.s),e:new Date(b.e)}); });
-  const out=[]; let cur=new Date(from);
-  merged.forEach(b=>{ if(b.s-cur>=dur&&cur>=from) out.push(new Date(cur)); if(b.e>cur) cur=new Date(b.e); });
-  if(to-cur>=dur&&cur>=from) out.push(new Date(cur));
-  // הקרובים לשעה שביקשת קודם, כי היא עדיין הכוונה. שבע בבוקר הוא טכנית פנוי,
-  // אבל הוא אינו הצעה למסיבה שביקשת לארבע אחר הצהריים — לכן גבול של חמש שעות.
-  return out.filter(d=>Math.abs(d-s0)<=5*3600e3)
-    .sort((a,b)=>Math.abs(a-s0)-Math.abs(b-s0)).slice(0,3);
-}
 function clashHtml(p){
   const list=conflictsFor(p);
   if(!list.length) return '';
   const head=list.length===1?'כבר יש משהו בשעה הזאת':'כבר יש '+list.length+' דברים בשעה הזאת';
-  const dur=new Date(p.end)-new Date(p.start);
-  const slots=freeStarts(p).map(d=>'<button data-slot="'+d.toISOString()+'">'+hhmm(d)+'</button>').join('');
-  // גם מחר, כי לפעמים היום פשוט מלא.
-  // "מחר באותה שעה" מוצע רק כשהוא באמת פנוי. הצעה תפוסה גרועה מאין הצעה.
-  const tm=new Date(p.start); tm.setDate(tm.getDate()+1);
-  const tmEnd=new Date(tm.getTime()+dur);
-  const tmFree=!conflictsFor({type:'event',start:tm.toISOString(),end:tmEnd.toISOString()}).length;
-  const tmBtn=tmFree?'<button data-slot="'+tm.toISOString()+'">מחר '+hhmm(tm)+'</button>':'';
-  const any=slots||tmBtn;
-  const lbl=!any?'<span class="lbl">אין חלון פנוי קרוב. אפשר לקבוע בכל זאת.</span>'
-    :'<span class="lbl">להזיז ל:</span>';
-  return '<b>'+head+':</b> '+esc(clashWords(list))
-    +(p.repeat&&p.repeat.freq?' — נבדק על המופע הראשון בלבד.':'')
-    +'<div class="slots">'+lbl+slots+tmBtn+'</div>';
+  // מתריע בלבד. השעה החלופית נקבעת בטופס שמתחת, ביד.
+  return '<b>'+head+':</b> '+esc(clashWords(list))+(p.repeat&&p.repeat.freq?' — נבדק על המופע הראשון בלבד.':'');
 }
 function reminderList(){ return String(S.cfg.remind||'').split(',').map(x=>parseInt(x,10)).filter(n=>!isNaN(n)); }
 // שני המבוגרים. השם השני נשמר בהגדרות ואינו בקוד.
@@ -2316,18 +2278,6 @@ $('msgs').addEventListener('input',e=>{
 });
 
 $('msgs').addEventListener('click',e=>{
-  const sl=e.target.closest('button[data-slot]');
-  if(sl){
-    const el=sl.closest('.prop'); const p=S.pending[el.dataset.id]; if(!p) return;
-    const dur=Math.max(9e5,new Date(p.end)-new Date(p.start));
-    p.start=sl.dataset.slot; p.end=new Date(new Date(p.start).getTime()+dur).toISOString();
-    // הטופס והכרטיס חייבים להסכים, אחרת העריכה הבאה תחזיר את השעה הישנה.
-    const dt=el.querySelector('[data-e="date"]'); if(dt) dt.value=dpart(p.start);
-    const fr=el.querySelector('[data-e="from"]'); if(fr) fr.value=tpart(p.start);
-    const to=el.querySelector('[data-e="to"]'); if(to) to.value=tpart(p.end);
-    refreshProp(el,p);
-    return;
-  }
   const u=e.target.closest('button[data-until]');
   if(u){
     const el=u.closest('.prop'); const p=S.pending[el.dataset.id]; if(!p) return;
