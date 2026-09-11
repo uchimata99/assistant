@@ -421,10 +421,14 @@ function thoughtsTab_() {
 }
 function dayUTC_(iso) { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); }
 function ymdUTC_(d) { return d.toISOString().slice(0, 10); }
+// המעצב נבנה פעם אחת. nextHeb_ קורא לכאן עד ארבע מאות פעם לכל מחשבה, ובניית
+// אובייקט Intl בכל קריאה הפכה חישוב זניח לשניות שלמות בכל שיחה.
+let HEB_FMT_ = null;
 // null כשאין תמיכה בלוח העברי. כל מי שקורא חייב לטפל בזה.
 function hebOf_(d) {
   try {
-    const f = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    if (HEB_FMT_ === null) HEB_FMT_ = new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const f = HEB_FMT_;
     const p = {}; const parts = f.formatToParts(d);
     for (let i = 0; i < parts.length; i++) p[parts[i].type] = parts[i].value;
     if (!p.month || !p.day) return null;

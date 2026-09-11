@@ -1509,9 +1509,11 @@ function refreshProp(el,p){
 }
 // מחשבה תלוית זמן: לקח שחוזר בכל שנה במועד שלו. אותו חישוב שרץ בשרת רץ גם כאן,
 // כדי שהכרטיס יוכל לומר מתי היא באמת תופיע, ולא רק שהיא נשמרה.
+let hebFmt=null;
 function hebOf(d){
   try{
-    const f=new Intl.DateTimeFormat('en-u-ca-hebrew',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
+    if(hebFmt===null) hebFmt=new Intl.DateTimeFormat('en-u-ca-hebrew',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
+    const f=hebFmt;
     const p={}; for(const x of f.formatToParts(d)) p[x.type]=x.value;
     if(!p.month||!p.day) return null;
     return {m:p.month,d:+p.day};
@@ -2223,7 +2225,7 @@ function scheduleAutoSend(){
   $('hint').textContent='שולח בעוד רגע. הקש לביטול.';
   const stop=()=>{ document.removeEventListener('pointerdown',stop,true); cancelAutoSend(); };
   document.addEventListener('pointerdown',stop,true);
-  autoSendT=setTimeout(()=>{ autoSendT=null; document.removeEventListener('pointerdown',stop,true); renderHint(); send($('input').value); },2200);
+  autoSendT=setTimeout(()=>{ autoSendT=null; document.removeEventListener('pointerdown',stop,true); renderHint(); send($('input').value); },3000);
 }
 
 /* ===================== אירועי ממשק ===================== */
