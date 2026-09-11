@@ -221,6 +221,12 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .prop .warn:empty{display:none}
 .prop .untilq{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .prop .untilq:empty{display:none}
+.termrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.termrow:last-of-type{border-bottom:0}
+.termrow .t{flex:1;min-width:0}
+.termrow .t b{display:block;font-weight:600}
+.termrow .t span{color:var(--ink-2);font-size:var(--fs-2)}
+.termrow .x{min-width:44px;min-height:44px;color:var(--ink-2);font-size:20px;flex:none}
 .prop .untilq .q{flex-basis:100%;font-size:var(--fs-2);font-weight:600;color:var(--warn)}
 .prop .untilq button{padding:8px 12px;border-radius:999px;background:var(--field);font-size:var(--fs-2);color:var(--ink);min-height:40px;border:1px solid var(--line)}
 .prop .edit{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;display:grid;gap:8px}
@@ -450,6 +456,14 @@ details[open]>summary{border-bottom:1px solid var(--line)}
       </div>
     </div>
 
+    <h2>מה העוזר למד</h2>
+    <div class="card">
+      <div class="form">
+        <div id="terms"></div>
+        <div class="note">מילים שלימדת אותו כשלא הכיר אותן. נשמרות בגיליון המשותף, ולכן מספיק ללמד פעם אחת משני הטלפונים.</div>
+      </div>
+    </div>
+
     <h2>חיבור לשרת</h2>
     <div class="card">
       <details id="conn">
@@ -545,7 +559,7 @@ const S = {
   cfg: load('cfg', DEFAULTS),
   tasks: load('tasks', []),
   log: load('log', []),
-  events: [], history: load('history', []), pending:{}, images:[], serverLog:null,
+  events: [], history: load('history', []), pending:{}, images:[], serverLog:null, terms:[],
 };
 let logSrc='local';
 function load(k,d){ try{ const v=JSON.parse(localStorage.getItem('assist:'+k)); return v==null? d : Object.assign(Array.isArray(d)?[]:{}, d, v);}catch(e){return d;} }
@@ -1035,6 +1049,14 @@ $('reclink').addEventListener('click',async()=>{
   catch(e){ $('recstat').textContent=u; }
 });
 $('calrefresh').addEventListener('click',refreshCalendars);
+// מחיקה מיידית ובלי אישור כפול: מונח שגוי הוא רעש, ולימוד מחדש הוא משפט אחד.
+$('terms').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-act="delterm"]'); if(!b) return;
+  const row=b.closest('.termrow'); const term=row.dataset.term;
+  b.textContent='...';
+  try{ const r=await api('deleteTerm',{term:term}); S.terms=r.terms||S.terms.filter(t=>t.term!==term); renderTerms(); addLog('נמחק מונח: '+term); }
+  catch(err){ b.textContent='×'; toast('לא נמחק: '+err.message); }
+});
 $('calendars').addEventListener('click',async e=>{
   const b=e.target.closest('button'); if(!b) return;
   const row=b.closest('.calrow'); if(!row) return;
@@ -1123,6 +1145,7 @@ function renderSettings(){
   $('conn').open=!S.cfg.url;
   renderTags();
   renderCalendars();
+  renderTerms();
 }
 function renderAll(){ renderHeader(); renderNow(); renderDayRail(); renderTasks(); renderWeek(); renderMonth(); renderLog(); }
 
@@ -1160,6 +1183,20 @@ async function loadTasks(){
     S.syncErr=''; save('tasks',S.tasks); renderTasks();
     if(pendingLocal.length) retrySync();
   }catch(err){ S.syncErr=err.message||'השרת לא ענה'; renderTasks(); }
+}
+// המילון חי בשרת ולא במכשיר, ולכן הוא נטען בכל פתיחה ובכל חזרה מהרקע.
+async function loadTerms(){
+  if(demo()) return;
+  try{ const r=await api('terms'); S.terms=r.terms||[]; renderTerms(); }catch(err){}
+}
+const TERM_KIND={place:'מקום',person:'אדם',activity:'חוג או פעילות',other:'אחר'};
+function renderTerms(){
+  const box=$('terms'); if(!box) return;
+  if(demo()){ box.innerHTML='<div class="note">מצב הדגמה. צריך שרת מחובר.</div>'; return; }
+  if(!S.terms.length){ box.innerHTML='<div class="note">עדיין לא לימדת אותו כלום. כשהוא ייתקל במילה שאינו מכיר, הוא ישאל.</div>'; return; }
+  box.innerHTML=S.terms.map(t=>`<div class="termrow" data-term="${esc(t.term)}">`
+    +`<div class="t"><b>${esc(t.term)}</b><span>${esc(t.meaning)}${t.kind?' · '+esc(TERM_KIND[t.kind]||t.kind):''}${t.author?' · '+esc(t.author):''}</span></div>`
+    +`<button class="x" data-act="delterm" aria-label="מחק מונח">×</button></div>`).join('');
 }
 async function retrySync(){
   let changed=false;
@@ -1266,6 +1303,18 @@ function editForm(p){
       <label>רשימת פריטים, שורה לכל פריט<textarea data-e="items" rows="3" placeholder="למשל: חלב&#10;לחם&#10;ביצים">${esc((p.items||[]).map(x=>x.t).join(String.fromCharCode(10)))}</textarea></label>
     </div>`;
   }
+  if(p.type==='term'){
+    const k=p.kind||'other';
+    return `<div class="edit" hidden>
+      <label>מה זה?<input type="text" data-e="meaning" value="${esc(p.meaning||p.guess||'')}" placeholder="במילים שלך, שורה אחת"></label>
+      <label>סוג<select data-e="tkind">
+        <option value="place" ${k==='place'?'selected':''}>מקום</option>
+        <option value="person" ${k==='person'?'selected':''}>אדם</option>
+        <option value="activity" ${k==='activity'?'selected':''}>חוג או פעילות</option>
+        <option value="other" ${k==='other'?'selected':''}>אחר</option>
+      </select></label>
+    </div>`;
+  }
   if(p.type==='email_draft'){
     return `<div class="edit" hidden>
       <label>אל<input type="text" class="ltr" data-e="to" value="${esc(p.to||'')}"></label>
@@ -1317,6 +1366,8 @@ function describe(p){
     return {kind:'תזכורת לאירוע קיים',title:p.title||'אירוע',
       meta:(d&&!isNaN(d)?`יום ${HE_DAYS[d.getDay()]} ${d.getDate()}.${d.getMonth()+1} · ${hhmm(d)} · `:'')+remindWords(p.minutes)};
   }
+  if(p.type==='term') return {kind:'מילה שלא הכרתי',title:p.term||'',
+    meta:p.meaning?p.meaning:(p.guess?('ניחשתי: '+p.guess+'. לתקן אם לא מדויק.'):'מה זה? אחרי שתסביר, לא אשאל שוב.')};
   if(p.type==='email_draft') return {kind:'טיוטת מייל (לא נשלחת)',title:p.subject||'ללא נושא',meta:(p.to?'אל: '+p.to+'\n':'')+(p.body||'')};
   return {kind:p.type,title:JSON.stringify(p),meta:''};
 }
@@ -1333,7 +1384,8 @@ function addProposal(p){
   const id='p'+Date.now()+Math.random().toString(36).slice(2,6);
   // ניחוש רק כשלא נאמר במפורש שזה פרטי. "תכניס לי" הוא החלטה, לא חוסר מידע.
   p.tags=normTags(p.tags);
-  if(!p.tags.length && p.shared!==false) p.tags=guessTags((p.title||'')+' '+(p.body||''));
+  if(p.type==='term'){ p.tags=[]; p.shared=false; }
+  else if(!p.tags.length && p.shared!==false) p.tags=guessTags((p.title||'')+' '+(p.body||''));
   // סדרה בלי סוף אינה ניתנת לאישור, ולכן הכרטיס שואל עד מתי במקום להיתקע.
   // השאלה נשאלת ואינה מוכרעת לבד: תאריך סיום הוא החלטה, לא השלמה טכנית.
   // המנוע מחזיר פריטים כמחרוזות; בפנים הם תמיד {t,d} כדי שאפשר יהיה לסמן אותם.
@@ -1343,15 +1395,17 @@ function addProposal(p){
   S.pending[id]=p;
   const h=accentOf(p); const d=describe(p);
   const el=document.createElement('div'); el.className='prop'; el.style.setProperty('--hat',h.color); el.dataset.id=id;
-  const canShare=p.type!=='email_draft';
+  // למונח אין בעלים ואין פרטי או משותף. הוא מילה במילון, לא פריט ביומן.
+  const isTerm=p.type==='term';
+  const canShare=p.type!=='email_draft'&&!isTerm;
   el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}${h.name?' · ':''}${esc(d.kind)}</div>
     <div class="pt">${esc(d.title)}${repChip(p)}${tagChips(p.tags)}</div><div class="pm">${esc(d.meta)}</div>
     ${p.why?`<div class="why">${esc(p.why)}</div>`:''}
-    <div class="who4">
+    ${isTerm?'':`<div class="who4">
       <span class="lbl">${((p.tags||[]).length||(p.people||[]).length)?'שויך אל':'למי זה שייך?'}</span>
       ${(S.cfg.tags||[]).map(t=>`<button class="kid" data-kid="${esc(t.key)}" aria-pressed="${(p.tags||[]).includes(t.key)}" style="${hatVars(tagColor(t)).replace(/--hat/g,'--tag')}">${esc(t.name)}${ageOf(t.dob)!==null?' · '+ageOf(t.dob):''}</button>`).join('')}
       ${peopleNames().map(n=>`<button class="grown" data-who="${esc(n)}" aria-pressed="${(p.people||[]).includes(n)}">${esc(n)}</button>`).join('')}
-    </div>
+    </div>`}
     ${canShare?`<div class="vis"><button data-vis="0" aria-pressed="${!p.shared}">${LOCK_ICON}פרטי</button><button data-vis="1" aria-pressed="${p.shared}">${SHARE_ICON}משותף</button><span class="status dest"></span></div>`:''}
     <div class="warn">${esc(repWarn(p))}</div>
     <div class="untilq"></div>
@@ -1431,6 +1485,13 @@ async function approve(id,el){
       const r=await api('remindEvent',{id:p.eventId,calendarId:p.calendarId||'',reminders:(p.minutes&&p.minutes.length)?p.minutes:[60]});
       addLog('נוספה תזכורת ל'+(r.title||p.title||'אירוע')+': '+remindWords(p.minutes),{by:'באישורך'});
       await loadAgenda();
+    } else if(p.type==='term'){
+      const meaning=String(p.meaning||p.guess||'').trim();
+      // בלי פירוש אין מה לשמור, וניחוש של המנוע אינו תשובה שלך.
+      if(!meaning){ st.textContent='כתוב מה זה, ואז אפשר לשמור.'; const f=el.querySelector('[data-e="meaning"]'); if(f) f.focus(); return; }
+      const r=await api('addTerm',{term:p.term,meaning:meaning,kind:p.kind||'other'});
+      if(r.terms) S.terms=r.terms; renderTerms();
+      addLog('נלמד מונח: '+p.term+' — '+meaning,{by:'באישורך'});
     } else if(p.type==='email_draft'){
       await api('createDraft',{to:p.to||'',subject:p.subject||'',body:p.body||''});
       addLog('נשמרה טיוטת מייל: '+(p.subject||'ללא נושא')+' — ממתינה לשליחה שלך',{by:'באישורך'});
@@ -1765,6 +1826,7 @@ function spokenCard(p){
       +(d&&!isNaN(d)?'. יום '+HE_DAYS[d.getDay()]+', '+d.getDate()+' ב'+HE_MONTHS[d.getMonth()]+', בשעה '+hhmm(d):'')
       +(extraRemind(p.minutes).length?'. '+remindWords(extraRemind(p.minutes)):'');
   }
+  if(p.type==='term') return 'לא הכרתי את '+(p.term||'')+'.';
   if(p.type==='email_draft') return 'טיוטת מייל. '+(p.subject||'ללא נושא');
   return describe(p).title;
 }
@@ -1779,6 +1841,25 @@ async function driveReview(r,cards,spokenText){
     if(!alive()) return;
     const id=el.dataset.id, p=S.pending[id];
     if(!p) continue;
+    // מילה שלא הכרתי: בנהיגה אין מקלדת, ולכן ההסבר נאמר בקול, מוקרא בחזרה,
+    // ונשמר רק אחרי אישור. זיהוי דיבור טועה, ומילון שנלמד לא נכון גרוע מריק.
+    if(p.type==='term'){
+      await speak('לא הכרתי את '+(p.term||'')+'. מה זה? אפשר לומר בכמה מילים, או לומר דלג.');
+      if(!alive()) return;
+      const said=(await listenOnce(7000)).trim();
+      if(!alive()) return;
+      if(!said||/דלג|עזוב|אחר כך/.test(said)){ await speak('בסדר, הכרטיס מחכה במסך.'); continue; }
+      p.meaning=said;
+      const mf=el.querySelector('[data-e="meaning"]'); if(mf) mf.value=said;
+      refreshProp(el,p);
+      await speak(said+'. לשמור?');
+      if(!alive()) return;
+      const keep=yesNo(await listenOnce(6000));
+      if(!alive()) return;
+      if(keep===true){ await approve(id,el); await speak('שמרתי.'); }
+      else await speak('לא שמרתי. הכרטיס מחכה במסך.');
+      continue;
+    }
     // סדרה בלי תאריך סיום אינה מאושרת, ובנהיגה אין מסך לבחור בו. שואלים בקול.
     // תשובה שלא הובנה נחשבת "לא": אירוע יחיד עדיף על סדרה שנה קדימה שלא ביקשו.
     if(p.type==='event'&&p.repeat&&p.repeat.freq&&!p.repeat.until){
@@ -1834,6 +1915,7 @@ $('msgs').addEventListener('input',e=>{
   const val=k=>{ const x=el.querySelector('[data-e="'+k+'"]'); return x?x.value:''; };
   const k=f.dataset.e;
   if(k==='kind'){ convertProposal(el,p,f.value); return; }
+  if(k==='tkind'){ p.kind=f.value; return; }
   if(k==='remind'||k==='minutes'){
     const v=Number(f.value);
     p[k]= v<0 ? [] : [v];
@@ -2027,7 +2109,7 @@ $('test').addEventListener('click',async()=>{
       j.sharedSheet?'רשימה משותפת: כן':'רשימה משותפת: לא מוגדרת',
       j.secured?'מוגן בסוד':'לא מוגן — כל מי שמכיר את הכתובת יכול לכתוב',d].filter(Boolean).join(' · ');
     toast('מחובר. הכתובת והסוד נשמרו במכשיר.');
-    loadAgenda(); loadTasks();
+    loadAgenda(); loadTasks(); loadTerms();
   }catch(err){$('connstat').textContent='לא מחובר: '+err.message;}
 });
 
@@ -2057,7 +2139,7 @@ $('who').addEventListener('click',e=>{const b=e.target.closest('button[data-p]')
 
 /* ===================== התחלה ===================== */
 if(!S.cfg.profile) $('who').hidden=false;
-renderAll(); setupSpeech(); loadAgenda(); loadTasks(); pickupShared();
+renderAll(); setupSpeech(); loadAgenda(); loadTasks(); loadTerms(); pickupShared();
 // הקישור בתיאור אירוע ההתראה נכנס ישר למסך הלוז
 // הקישור מאירוע ההתראה מגיע עם digest בכתובת. מסירים אותו מיד אחרי הפתיחה,
 // אחרת כל טעינה מחדש פותחת שוב את הדף והמשתמש נעול בו.
@@ -2078,7 +2160,7 @@ setInterval(()=>{renderHeader();renderNow();renderDayRail();},60000);
 // בלי זה מטלה שבן או בת הזוג הוסיפו לא מופיעה עד רענון של הדף
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){ cancelAutoSend(); driveStop(); stopMic(); return; }
-  loadAgenda(); loadTasks(); if(logSrc==='server') loadServerLog();
+  loadAgenda(); loadTasks(); loadTerms(); if(logSrc==='server') loadServerLog();
 });
 // הכיתוב נמחק ברגע שמתחברים. קודם הוא נקבע פעם אחת בטעינה ונשאר תקוע גם אחרי חיבור.
 // הפלטה נקראת מגוגל ולא נשמרת בקוד, כדי שלא תתיישן אם גוגל ישנה אותה.

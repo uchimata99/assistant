@@ -23,9 +23,10 @@
 - README.md — הקמה. DECISIONS.md — למה בנינו כך.
 
 ## פרוטוקול אפליקציה ↔ שרת
-בקשה: POST עם גוף JSON בטקסט רגיל, שדה action ושדות לפי הפעולה. פעולות: ping, agenda, calendars, createCalendar, createEvent, deleteEvent, tasks, addTask, updateTask, deleteTask, createDraft, log, digest, setDigest, chat.
+בקשה: POST עם גוף JSON בטקסט רגיל, שדה action ושדות לפי הפעולה. פעולות: ping, agenda, calendars, colors, createCalendar, updateCalendar, deleteCalendar, shareCalendar, shareAll, createEvent, deleteEvent, remindEvent, tasks, addTask, updateTask, deleteTask, syncTasks, terms, addTerm, deleteTerm, createDraft, log, digest, setDigest, chat.
 כל בקשה נושאת שדה secret. כשמוגדר APP_SECRET בשרת, בקשה בלי סוד תואם נדחית.
-תשובת chat: {reply, proposals[]} כאשר כל הצעה היא event / task / email_draft עם שדות hat, tags, shared, why.
+תשובת chat: {reply, proposals[], warning?} כאשר כל הצעה היא event / task / reminder / email_draft / term, עם שדות tags, shared, why.
+מונח חדש: מילה שהמנוע אינו מכיר חוזרת כהצעה מסוג term ולעולם לא מבטלת את הבקשה. שאר ההצעות חוזרות כרגיל לצידה. מה שהמשתמש עונה נשמר בגיליון "מילון" בגיליון המשותף, נקרא בכל שיחה, וניתן לעריכה בהגדרות.
 
 ## עיצוב
 - כובעים (הקשרים) בצבע, פס צבע בצד ימין של כרטיס "עכשיו". תגים (הילדים) כגלולות קטנות.

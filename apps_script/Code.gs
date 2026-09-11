@@ -53,6 +53,9 @@ function doPost(e) {
       case 'updateTask':     return json_(updateTask_(b));
       case 'deleteTask':     return json_(deleteTask_(b));
       case 'syncTasks':      return json_(syncGoogleTasks_());
+      case 'terms':          return json_({ terms: listTerms_() });
+      case 'addTerm':        return json_(addTerm_(b));
+      case 'deleteTerm':     return json_(deleteTerm_(b));
       case 'createDraft':    return json_(createDraft_(b));
       case 'log':            return json_({ entries: readLog_(b.limit || 120) });
       case 'digest':         return json_(digest_(b));
@@ -369,6 +372,62 @@ function readLog_(limit) {
   })).reverse();
 }
 
+/* ---------- מילון המונחים ---------- */
+/*
+ * מילים וקיצורים שהמנוע אינו מכיר: שם מגרש, כינוי של מוסד, קיצור מהבית.
+ * הם יושבים בגיליון המשותף ולא במכשיר, כדי שלימוד אחד ישרת את שניכם ויישרד
+ * החלפת טלפון. נקראים בכל שיחה, ולכן מונח שנלמד תופס כבר בהודעה הבאה.
+ */
+const TERM_HEADER = ['מונח', 'פירוש', 'סוג', 'מי הוסיף', 'נוצר'];
+function termsTab_() {
+  const ss = sharedSheet_();
+  if (!ss) throw new Error('הגיליון המשותף לא מוגדר, ובלעדיו אין מילון משותף.');
+  let sh = ss.getSheetByName('מילון');
+  if (!sh) { sh = ss.insertSheet('מילון'); sh.appendRow(TERM_HEADER); }
+  return sh;
+}
+// סובלני בכוונה: מילון שלא נקרא לא יפיל שיחה.
+function listTerms_() {
+  try {
+    const vals = termsTab_().getDataRange().getValues();
+    const out = [];
+    for (let i = 1; i < vals.length; i++) {
+      if (!vals[i][0]) continue;
+      out.push({ term: String(vals[i][0]).trim(), meaning: String(vals[i][1] || ''), kind: String(vals[i][2] || ''), author: String(vals[i][3] || '') });
+    }
+    return out;
+  } catch (e) { return []; }
+}
+function addTerm_(b) {
+  const term = String(b.term || '').trim();
+  if (!term) throw new Error('חסר מונח');
+  const meaning = String(b.meaning || '').trim();
+  if (!meaning) throw new Error('חסר פירוש למונח');
+  const sh = termsTab_();
+  const vals = sh.getDataRange().getValues();
+  // מונח קיים מתעדכן ואינו נכפל. הלימוד האחרון גובר.
+  for (let i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]).trim() === term) {
+      sh.getRange(i + 1, 2).setValue(meaning);
+      sh.getRange(i + 1, 3).setValue(b.kind || '');
+      log_('addTerm', term + ' — עודכן ל: ' + meaning);
+      return { ok: true, updated: true, terms: listTerms_() };
+    }
+  }
+  sh.appendRow([term, meaning, b.kind || '', b.me || '', new Date()]);
+  log_('addTerm', term + ' = ' + meaning);
+  return { ok: true, terms: listTerms_() };
+}
+function deleteTerm_(b) {
+  const term = String(b.term || '').trim();
+  const sh = termsTab_();
+  const vals = sh.getDataRange().getValues();
+  for (let i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]).trim() === term) { sh.deleteRow(i + 1); log_('deleteTerm', term); return { ok: true, terms: listTerms_() }; }
+  }
+  return { ok: false, terms: listTerms_() };
+}
+
 /* ---------- ג'ימייל: טיוטה בלבד ---------- */
 function createDraft_(b) { GmailApp.createDraft(b.to || '', b.subject || '', b.body || ''); log_('createDraft', b.subject || ''); return { ok: true }; }
 
@@ -515,6 +574,8 @@ function chat_(b) {
   if (!key) throw new Error('חסר מפתח: הגדירו ANTHROPIC_API_KEY במאפייני הסקריפט');
   const ctx = b.context || {};
   const fem = ctx.gender === 'f';
+  // נקרא כאן ולא נשלח מהאפליקציה: כך מונח שנלמד במכשיר אחד תופס מיד בשני.
+  const terms = listTerms_();
   const system = [
     'אתה עוזר אישי של ' + (ctx.me || 'המשתמש') + '. ' + (fem ? 'פנה אליה בלשון נקבה.' : 'פנה אליו בלשון זכר.') + ' ענה בעברית, קצר וישיר, בלי מילות ריצוד.',
     'זהו מכשיר של אחד משני בני זוג. לכל אחד עוזר משלו; מה שמסומן "משותף" נראה אצל שניהם.',
@@ -538,6 +599,9 @@ function chat_(b) {
     'תזכורת לאירוע קיים: כשנאמר "תוסיף תזכורת ל..." בלי לקבוע אירוע חדש, מצא ברשימת האירועים שקיבלת את האירוע שהכי מתאים לתיאור — גם אם השם אינו מדויק — והחזר הצעה מסוג reminder עם ה-eventId שלו. ב-why כתוב לאיזה אירוע התכוונת ולמה, כדי שהמשתמש יוכל לאשר שזיהית נכון. אם יותר מאירוע אחד מתאים, החזר הצעה לכל אחד מהם ותן למשתמש לבחור. אם אף אירוע לא מתאים, אל תמציא — אמור זאת ב-reply.',
     'שיוך למי שמדבר: "לי", "אליי", "שלי", "ביומן שלי" מתכוונים למשתמש עצמו — shared=false, tags ריק, ו-people ריק. שם של ילד מתכוון לילד, עם התג שלו. שם בן או בת הזוג מתכוון להם, ב-people.',
     'תזכורת מול מטלה: אם נאמר "ביומן", "תזכורת ביומן", "תקבע", או שנאמרה שעה ביום — החזר event, לא task. task הוא רק פריט ברשימה, בלי שעה. מטלה נכנסת לרשימת המטלות בלבד ולעולם לא ליומן גוגל, ולכן אסור לתאר task בתשובה כמשהו שנכנס "ליומן".',
+    'מילון המונחים שלכם: ' + JSON.stringify(terms) + '. השתמש בו כדי להבין מילים, שמות מקומות וקיצורים אישיים. מונח שמופיע במילון מובן, ואין לשאול עליו שוב.',
+    'מילה שאינך מכיר: אם בהודעה יש מילה שנראית שם של מקום, מוסד, חוג, אדם או קיצור אישי, והיא אינה במילון, אינה שם של ילד ואינה מילה רגילה בעברית — אל תבטל את הבקשה, אל תשתוק ואל תנחש בשקט. החזר את כל ההצעות שכן הובנו, ובנוסף הצעה מסוג term על אותה מילה. זו הדרך היחידה של המשתמש ללמד אותך את השפה שלו.',
+    'מתי לא לשאול על מילה: מילים רגילות בעברית, ערים ומקומות מוכרים, שמות הילדים והכינויים שלהם, ומונח שכבר במילון. אל תחזיר יותר מהצעת term אחת לאותה מילה, ולא יותר משלוש בתשובה אחת.',
     'כשיש התנגשות ביומן ציין זאת ב־why. הפרד בין חשוב לדחוף.',
     '',
     'החזר אך ורק אובייקט JSON תקין, בלי טקסט מסביב ובלי סימני קוד:',
@@ -546,7 +610,8 @@ function chat_(b) {
     ' {"type":"task","title":"...","tags":[],"shared":false,"importance":"high|normal","due":"YYYY-MM-DD","mit":false,"items":[],"why":"..."},',
     'מטלה עם רשימה: כשהבקשה מכילה כמה דברים לעשות תחת כותרת אחת — קניות, ציוד לטיול, הכנות לאירוע — החזר מטלה אחת עם items, מערך של מחרוזות קצרות, ולא מטלה נפרדת לכל פריט. מטלה רגילה מחזירה items ריק.',
     ' {"type":"email_draft","to":"","subject":"...","body":"...","why":"..."},',
-    ' {"type":"reminder","eventId":"המזהה מתוך רשימת האירועים","title":"שם האירוע כפי שהוא ביומן","start":"ISO של האירוע","minutes":[60],"why":"..."}',
+    ' {"type":"reminder","eventId":"המזהה מתוך רשימת האירועים","title":"שם האירוע כפי שהוא ביומן","start":"ISO של האירוע","minutes":[60],"why":"..."},',
+    ' {"type":"term","term":"המילה כפי שנאמרה","kind":"place|person|activity|other","guess":"ההשערה שלך, או ריק","why":"למה שאלת"}',
     ']}',
     'אם אין פעולה להציע, proposals ריק.',
   ].join('\n');
