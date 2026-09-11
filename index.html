@@ -219,6 +219,10 @@ h2{font-family:var(--font-head);font-weight:500;font-size:20px;margin:22px 2px 8
 .prop .rep svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2}
 .prop .warn{margin-top:8px;font-size:14px;font-weight:600;color:var(--warn,#B4552B)}
 .prop .warn:empty{display:none}
+.prop .untilq{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.prop .untilq:empty{display:none}
+.prop .untilq .q{flex-basis:100%;font-size:var(--fs-2);font-weight:600;color:var(--warn)}
+.prop .untilq button{padding:8px 12px;border-radius:999px;background:var(--field);font-size:var(--fs-2);color:var(--ink);min-height:40px;border:1px solid var(--line)}
 .prop .edit{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;display:grid;gap:8px}
 .prop .edit label{display:grid;gap:3px;font-size:var(--fs-2);color:var(--ink-2)}
 .prop .edit input,.prop .edit select,.prop .edit textarea{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:var(--field);color:var(--ink);font:inherit;font-size:var(--fs-2);min-height:42px}
@@ -553,12 +557,10 @@ const demo = () => !S.cfg.url;
 function T(){
   return S.cfg.gender==='f' ? {
     placeholder:'כתבי או דברי: קבעי, הזכירי, נסחי...', approve:'אשרי', speak:'מקשיב... דברי.', retry:'לא שמעתי כלום. נסי שוב.',
-    mitsEmpty:'אמרי לי מה המטלות המהותיות של היום, או לחצי לחיצה ארוכה על מטלה כדי לקדם אותה לכאן.',
-    tasksEmpty:'כתבי "תזכיר לי..." או דברי אליי.', share:'שתפי', you:'את',
+    mitsEmpty:'', tasksEmpty:'', share:'שתפי', you:'את',
   } : {
     placeholder:'הודעה', approve:'אשר', speak:'מקשיב... דבר.', retry:'לא שמעתי כלום. נסה שוב.',
-    mitsEmpty:'אמור לי מה המטלות המהותיות של היום, או לחץ לחיצה ארוכה על מטלה כדי לקדם אותה לכאן.',
-    tasksEmpty:'כתוב "תזכיר לי..." או דבר אליי.', share:'שתף', you:'אתה',
+    mitsEmpty:'', tasksEmpty:'', share:'שתף', you:'אתה',
   };
 }
 
@@ -686,7 +688,18 @@ function repChip(p){
   if(!r||!r.freq) return '';
   return `<span class="rep">${REPEAT_ICON}חוזר · ${FREQ_HE[r.freq]||''}${r.until?' · עד '+shortDate(r.until):''}</span>`;
 }
-// חזרתי בלי סוף נמשך לנצח ביומן. לכן אין אישור עד שנקבע עד מתי.
+// חוג נגמר עם שנת הלימודים, ולכן זו ברירת המחדל לסדרה שהגיעה בלי תאריך סיום.
+// המנוע אינו ממציא תאריך, והמשתמש לא אמור להמציא אותו שלוש פעמים בשביל לוז אחד.
+function schoolYearEnd(from){
+  const d=from?new Date(from):new Date(); if(isNaN(d)) return '';
+  const june=new Date(d.getFullYear(),5,30);
+  return ymd(d<=june?june:new Date(d.getFullYear()+1,5,30));
+}
+function yearFrom(from){ const d=from?new Date(from):new Date(); if(isNaN(d)) return ''; const n=new Date(d); n.setFullYear(n.getFullYear()+1); return ymd(n); }
+// תאריך להקראה: "30 ביוני" ולא רצף ספרות.
+function spokenDate(v){ const d=new Date(String(v||'')+'T00:00:00'); return isNaN(d)?'':d.getDate()+' ב'+HE_MONTHS[d.getMonth()]; }
+// חזרתי בלי סוף נמשך לנצח ביומן. לכן אין אישור עד שנקבע עד מתי — רשת ביטחון
+// למקרה שההשלמה לא רצה, למשל בכרטיס שנבנה בדרך אחרת.
 function repWarn(p){ const r=p&&p.repeat; return (r&&r.freq&&!r.until)?'אירוע חוזר — צריך לקבוע עד מתי לפני האישור.':''; }
 const LOCK_ICON='<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 
@@ -860,7 +873,7 @@ function renderNow(){
   } else {
     html=`<div class="hat">היום</div>
       <div class="title">${next?'זמן פנוי עד '+hhmm(new Date(next.start)):(todays.length?'היום הסתיים ביומן':'אין אירועים ביומן היום')}</div>
-      <div class="meta">${next?'חלון ריכוז של '+fmtDur(Math.round((new Date(next.start)-now)/60000))+'. מה המטלה הכי חשובה?':'זמן טוב לסגור לולאות פתוחות.'}</div>`;
+      <div class="meta">${next?'חלון ריכוז של '+fmtDur(Math.round((new Date(next.start)-now)/60000))+'. מה המטלה הכי חשובה?':''}</div>`;
     $('now').setAttribute('style',hatVars('#8A8F95'));
   }
   if(next) html+=`<div class="next">הבא: <b>${hhmm(new Date(next.start))}</b> ${esc(next.title)}${tagChips(next.tags)}</div>`;
@@ -874,8 +887,7 @@ function renderDayRail(){
   const rest=todays.filter(e=>new Date(e.end)>now);
   if(!rest.length){
     const what = todays.length ? "אין עוד אירועים היום" : "היום פנוי ביומן";
-    const how = demo() ? "זה מצב הדגמה. חברו את השרת בהגדרות כדי לראות את היומן האמיתי."
-                       : "כאן יופיעו האירועים שנותרו והזמן הפנוי ביניהם. שבצו מטלה מהותית לשעה מסוימת.";
+    const how = demo() ? "מצב הדגמה. חברו שרת בהגדרות." : "";
     box.innerHTML='<div class="empty"><b>'+what+'</b>'+how+'</div>';
     return;
   }
@@ -955,7 +967,7 @@ function renderMonth(){
         +`<div><div class="title"><span dir="auto">${esc(e.title)}</span>${tagChips(e.tags)} ${sharedChip(e)}</div>`
         +(e.location?`<div class="loc">${esc(e.location)}</div>`:'')+`</div></div>`;
     }).join('')
-    : `<div class="empty"><b>אין אירועים ביום הזה</b>${demo()?'זה מצב הדגמה. חברו את השרת בהגדרות.':'אפשר לבחור יום אחר ברשת שלמעלה.'}</div>`;
+    : `<div class="empty"><b>אין אירועים ביום הזה</b>${demo()?'מצב הדגמה. חברו שרת בהגדרות.':''}</div>`;
   $('month').innerHTML=html;
 }
 let monthSel=null;
@@ -974,11 +986,11 @@ function renderLog(){
       const when=new Date(e.when); const ok=!isNaN(when.getTime());
       return `<div class="log"><div>${esc(LOG_LABEL[e.action]||e.action)}${e.details?': '+esc(e.details):''}</div>
         <div class="when">${esc(ok?when.toLocaleString('he-IL',{dateStyle:'short',timeStyle:'short'}):String(e.when))} · בגיליון</div></div>`;
-    }).join(''):`<div class="empty"><b>הגיליון ריק</b>כל פעולה שהשרת מבצע נרשמת שם, וגם ניקוי הדפדפן לא מוחק אותה.</div>`;
+    }).join(''):`<div class="empty"><b>הגיליון ריק</b></div>`;
     return;
   }
   box.innerHTML=S.log.length?S.log.slice().reverse().map((l,i)=>`<div class="log"><div>${esc(l.text)}${l.undoable&&!l.undone?`<button class="undo" data-i="${S.log.length-1-i}">בטל</button>`:''}${l.undone?' · בוטל':''}</div><div class="when">${esc(l.when)}${l.by?' · '+esc(l.by):''}</div></div>`).join('')
-    :`<div class="empty"><b>עדיין אין פעולות</b>כל דבר שהעוזר יעשה בשמך יופיע כאן: מה, מתי, ולמה. היומן במכשיר נמחק עם ניקוי הדפדפן — העותק בשרת נשאר.</div>`;
+    :`<div class="empty"><b>עדיין אין פעולות</b></div>`;
 }
 async function loadServerLog(){
   if(demo()){ S.serverLog=[]; return; }
@@ -1295,7 +1307,7 @@ function refreshProp(el,p){
   const w=el.querySelector('.warn'); if(w) w.textContent=repWarn(p);
   const lbl=el.querySelector('.who4 .lbl');
   if(lbl) lbl.textContent=((p.tags||[]).length||(p.people||[]).length)?'שויך אל':'למי זה שייך?';
-  updateDest(el,p);
+  updateDest(el,p); untilQuestion(el,p);
 }
 function describe(p){
   if(p.type==='event'){const s=new Date(p.start),e=new Date(p.end);return {kind:'פגישה ביומן',title:p.title,meta:`יום ${HE_DAYS[s.getDay()]} ${s.getDate()}.${s.getMonth()+1} · ${hhmm(s)}–${hhmm(e)}${p.location?' · '+p.location:''} · ${remindWords(remindFor(p))}`};}
@@ -1322,6 +1334,8 @@ function addProposal(p){
   // ניחוש רק כשלא נאמר במפורש שזה פרטי. "תכניס לי" הוא החלטה, לא חוסר מידע.
   p.tags=normTags(p.tags);
   if(!p.tags.length && p.shared!==false) p.tags=guessTags((p.title||'')+' '+(p.body||''));
+  // סדרה בלי סוף אינה ניתנת לאישור, ולכן הכרטיס שואל עד מתי במקום להיתקע.
+  // השאלה נשאלת ואינה מוכרעת לבד: תאריך סיום הוא החלטה, לא השלמה טכנית.
   // המנוע מחזיר פריטים כמחרוזות; בפנים הם תמיד {t,d} כדי שאפשר יהיה לסמן אותם.
   p.items=(p.items||[]).map(x=>typeof x==='string'?{t:x,d:false}:{t:String((x&&x.t)||''),d:!!(x&&x.d)}).filter(x=>x.t);
   if(p.shared==null) p.shared=p.tags.length>0;
@@ -1340,13 +1354,26 @@ function addProposal(p){
     </div>
     ${canShare?`<div class="vis"><button data-vis="0" aria-pressed="${!p.shared}">${LOCK_ICON}פרטי</button><button data-vis="1" aria-pressed="${p.shared}">${SHARE_ICON}משותף</button><span class="status dest"></span></div>`:''}
     <div class="warn">${esc(repWarn(p))}</div>
+    <div class="untilq"></div>
     ${editForm(p).replace(' hidden>','>')}
     <div class="acts"><button class="yes" data-act="approve">${T().approve}</button><button class="no" data-act="reject">לא עכשיו</button></div>
     <div class="status"></div>`;
-  $('msgs').appendChild(el); updateDest(el,p);
+  $('msgs').appendChild(el); updateDest(el,p); untilQuestion(el,p);
   // חזרתי בלי "עד מתי" — פותחים את העריכה מיד, כי בלי זה אי אפשר לאשר.
   scrollMsgs();
   return el;
+}
+// סדרה חוזרת בלי תאריך סיום אינה מאושרת. במקום להיתקע מול אזהרה, הכרטיס שואל
+// עד מתי ונותן שתי תשובות בלחיצה. ההכרעה נשארת של המשתמש.
+function untilQuestion(el,p){
+  const box=el.querySelector('.untilq'); if(!box) return;
+  const need = p.type==='event' && p.repeat && p.repeat.freq && !p.repeat.until;
+  if(!need){ box.innerHTML=''; return; }
+  const sy=schoolYearEnd(p.start), yr=yearFrom(p.start);
+  box.innerHTML='<span class="q">חוזר '+(FREQ_HE[p.repeat.freq]||'')+', בלי תאריך סיום. עד מתי?</span>'
+    +'<button data-until="'+sy+'">סוף שנת הלימודים · '+shortDate(sy)+'</button>'
+    +'<button data-until="'+yr+'">עוד שנה · '+shortDate(yr)+'</button>'
+    +'<button data-until="off">לא חוזר</button>';
 }
 function updateDest(el,p){ const d=el.querySelector('.dest'); if(!d) return; d.textContent = p.type==='event' ? (p.shared?targetCal(p).name:'היומן האישי שלך') : (p.shared?'ברשימה המשותפת':'רק אצלך'); }
 
@@ -1722,7 +1749,7 @@ function spokenCard(p){
     return 'פגישה. '+p.title+'. יום '+HE_DAYS[a.getDay()]+', '+a.getDate()+' ב'+HE_MONTHS[a.getMonth()]
       +', בשעה '+hhmm(a)+' עד '+hhmm(b)
       +(p.location?', ב'+p.location:'')
-      +(p.repeat&&p.repeat.freq?', חוזר '+(FREQ_HE[p.repeat.freq]||''):'')
+      +(p.repeat&&p.repeat.freq?', חוזר '+(FREQ_HE[p.repeat.freq]||'')+(p.repeat.until?' עד '+spokenDate(p.repeat.until):''):'')
       +(extraRemind(remindFor(p)).length?'. '+remindWords(extraRemind(remindFor(p))):'');
   }
   if(p.type==='task'){
@@ -1752,6 +1779,17 @@ async function driveReview(r,cards,spokenText){
     if(!alive()) return;
     const id=el.dataset.id, p=S.pending[id];
     if(!p) continue;
+    // סדרה בלי תאריך סיום אינה מאושרת, ובנהיגה אין מסך לבחור בו. שואלים בקול.
+    // תשובה שלא הובנה נחשבת "לא": אירוע יחיד עדיף על סדרה שנה קדימה שלא ביקשו.
+    if(p.type==='event'&&p.repeat&&p.repeat.freq&&!p.repeat.until){
+      await speak('חוזר '+(FREQ_HE[p.repeat.freq]||'')+', בלי תאריך סיום. לקבוע עד סוף שנת הלימודים?');
+      if(!alive()) return;
+      const ans=yesNo(await listenOnce(6000));
+      if(!alive()) return;
+      if(ans===true){ p.repeat.until=schoolYearEnd(p.start); refreshProp(el,p); }
+      else { p.repeat=null; refreshProp(el,p); await speak('בסדר, אירוע יחיד.'); }
+      if(!alive()) return;
+    }
     await speak(spokenCard(p)+'. לאשר?');
     if(!alive()) return;
     let v=yesNo(await listenOnce(6000));
@@ -1830,6 +1868,15 @@ $('msgs').addEventListener('input',e=>{
 });
 
 $('msgs').addEventListener('click',e=>{
+  const u=e.target.closest('button[data-until]');
+  if(u){
+    const el=u.closest('.prop'); const p=S.pending[el.dataset.id]; if(!p) return;
+    if(u.dataset.until==='off') p.repeat=null; else p.repeat.until=u.dataset.until;
+    const f=el.querySelector('[data-e="until"]'); if(f) f.value=(p.repeat&&p.repeat.until)||'';
+    const fq=el.querySelector('[data-e="freq"]'); if(fq) fq.value=(p.repeat&&p.repeat.freq)||'';
+    refreshProp(el,p);
+    return;
+  }
   const v=e.target.closest('button[data-vis]');
   const who=e.target.closest('button[data-who]');
   if(who){
