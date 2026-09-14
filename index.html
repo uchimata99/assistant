@@ -1544,6 +1544,30 @@ function nextHeb(month,day,fromIso){
   }
   return last?ymdUTC(last):null;
 }
+// המנוע טועה בהמרת חג עברי לתאריך לועזי — בבדיקה, שלוש פעמים מתוך שש, עד שלושה
+// שבועות מהמועד. את החודש והיום העבריים הוא יודע בוודאות, ולכן הם מגיעים ממנו
+// והתאריך הלועזי מחושב כאן. השמות חייבים להיות בדיוק כפי ש-Intl מחזיר, כי החיפוש
+// משווה מחרוזות.
+const HEB_MONTHS={
+  'tishri':'Tishri','tishrei':'Tishri','תשרי':'Tishri',
+  'heshvan':'Heshvan','cheshvan':'Heshvan','marcheshvan':'Heshvan','marheshvan':'Heshvan','חשון':'Heshvan','חשוון':'Heshvan','מרחשון':'Heshvan','מרחשוון':'Heshvan',
+  'kislev':'Kislev','כסלו':'Kislev',
+  'tevet':'Tevet','teves':'Tevet','טבת':'Tevet',
+  'shevat':'Shevat','shvat':'Shevat','שבט':'Shevat',
+  'adar':'Adar','אדר':'Adar',
+  'adar i':'Adar I','adar 1':'Adar I','אדר א':'Adar I',
+  'adar ii':'Adar II','adar 2':'Adar II','אדר ב':'Adar II',
+  'nisan':'Nisan','nissan':'Nisan','ניסן':'Nisan',
+  'iyar':'Iyar','iyyar':'Iyar','אייר':'Iyar','איר':'Iyar',
+  'sivan':'Sivan','סיון':'Sivan','סיוון':'Sivan',
+  'tamuz':'Tamuz','tammuz':'Tamuz','תמוז':'Tamuz',
+  'av':'Av','menachem av':'Av','אב':'Av','מנחם אב':'Av',
+  'elul':'Elul','אלול':'Elul'
+};
+function hebMonthName(s){
+  const k=String(s||'').toLowerCase().split("'").join('').split('׳').join('').split('"').join('').split('״').join('').trim();
+  return HEB_MONTHS[k]||null;
+}
 function nextGreg(anchorIso,fromIso){
   const a=dayUTC(anchorIso), from=dayUTC(fromIso);
   for(let y=from.getUTCFullYear(); y<=from.getUTCFullYear()+2; y++){
@@ -1631,6 +1655,13 @@ function addProposal(p){
   // ניחוש רק כשלא נאמר במפורש שזה פרטי. "תכניס לי" הוא החלטה, לא חוסר מידע.
   p.tags=normTags(p.tags);
   if(p.type==='term'||p.type==='thought'||p.type==='delete_event'){ p.tags=[]; p.shared=false; }
+  // בחג עברי התאריך הלועזי מחושב מהחודש והיום העבריים, ולא נלקח מהמנוע. אם השם לא
+  // זוהה נשארת ההערכה של המנוע, והכרטיס מציג את התאריך כדי שאפשר יהיה לתקן.
+  if(p.type==='thought'&&p.cal==='heb'&&p.hm&&+p.hd){
+    const m=hebMonthName(p.hm);
+    const at=m?nextHeb(m,+p.hd,ymd(new Date())):null;
+    if(at) p.anchor=at;
+  }
   else if(!p.tags.length && p.shared!==false) p.tags=guessTags((p.title||'')+' '+(p.body||''));
   // סדרה בלי סוף אינה ניתנת לאישור, ולכן הכרטיס שואל עד מתי במקום להיתקע.
   // השאלה נשאלת ואינה מוכרעת לבד: תאריך סיום הוא החלטה, לא השלמה טכנית.
