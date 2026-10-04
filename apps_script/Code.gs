@@ -437,13 +437,22 @@ function hebOf_(d) {
 }
 // מחכים לצאת מהחודש לפני שמחפשים כניסה אליו, אחרת חישוב שמתחיל ביום האירוע
 // עצמו נתפס שוב באותו חודש ומחזיר את סופו במקום את השנה הבאה.
+// בשנה מעוברת יש אדר א׳ ואדר ב׳, ובשנה פשוטה אדר אחד. אדר סתם הוא אדר ב׳,
+// כי הוא החודש שלפני ניסן — בדיוק כמו אדר בשנה פשוטה. אדר א׳ או אדר ב׳
+// שנאמרו במפורש נופלים לאדר היחיד בשנה פשוטה.
+function hebMonthMatch_(want, got) {
+  if (got === want) return true;
+  if (want === 'Adar' && got === 'Adar II') return true;
+  if ((want === 'Adar I' || want === 'Adar II') && got === 'Adar') return true;
+  return false;
+}
 function nextHeb_(month, day, fromIso) {
   const from = dayUTC_(fromIso);
   let left = false, matched = false, lastInMonth = null;
   for (let add = 1; add <= 400; add++) {
     const c = new Date(from.getTime() + add * 86400000);
     const h = hebOf_(c); if (!h) return null;
-    const same = h.m === month || h.m.indexOf(month) === 0;   // אדר מתאים גם לאדר א׳
+    const same = hebMonthMatch_(month, h.m);
     if (!same) { left = true; if (matched) break; continue; }
     if (!left) continue;
     matched = true; lastInMonth = c;
