@@ -731,6 +731,25 @@ function syncGoogleTasks_() {
 }
 
 /* ---------- שיחה עם קלוד ---------- */
+function callEngine_(key, system, messages) {
+  return UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post', contentType: 'application/json',
+    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+    payload: JSON.stringify({ model: model_(), max_tokens: 8000, system: system, messages: messages }),
+    muteHttpExceptions: true,
+  });
+}
+// רק בלוקי טקסט. בלוק חשיבה אינו תשובה, ותוכנו מוסתר ממילא.
+function engineText_(data) {
+  return (data.content || []).filter(function (c) { return c.type === 'text'; })
+    .map(function (c) { return c.text; }).join('\n').trim();
+}
+function engineDetail_(data) {
+  const kinds = (data.content || []).map(function (c) { return c.type; }).join(',') || 'אין בלוקים';
+  const u = data.usage || {};
+  return (data.stop_reason || 'בלי סיבה') + ' · בלוקים: ' + kinds
+    + ' · אסימונים: ' + (u.input_tokens || '?') + ' נכנסו, ' + (u.output_tokens || 0) + ' יצאו';
+}
 function model_() { return PROPS.getProperty('MODEL') || 'claude-sonnet-5'; }
 function chat_(b) {
   const key = PROPS.getProperty('ANTHROPIC_API_KEY');
@@ -804,15 +823,26 @@ function chat_(b) {
   content.push({ type: 'text', text: b.message || 'מה יש כאן? חלץ אירועים ומטלות.' });
   const messages = history.concat([{ role: 'user', content: content }]);
 
-  const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-    method: 'post', contentType: 'application/json',
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    payload: JSON.stringify({ model: model_(), max_tokens: 8000, system: system, messages: messages }),
-    muteHttpExceptions: true,
-  });
-  const code = res.getResponseCode(); const data = JSON.parse(res.getContentText());
+  // המנוע חושב לפני שהוא עונה, והחשיבה חוזרת כבלוק משלה שתוכנו מוסתר. פעם בכמה
+  // זמן הוא מסיים את התור אחרי החשיבה בלי להוציא בלוק טקסט כלל, ואז התוכן מכיל
+  // רק thinking והסינון מוצא כלום. זה מה שנראה למשתמש כתשובה ריקה.
+  // ניסיון חוזר אחד פותר, והוא בטוח כאן: שיחה אינה כותבת ליומן ולא לגיליון,
+  // ולכן אין סכנת כפילות כמו בפעולת כתיבה.
+  let res = callEngine_(key, system, messages);
+  let code = res.getResponseCode();
+  let data = JSON.parse(res.getContentText());
   if (code >= 300) throw new Error('שגיאת מנוע ' + code + ': ' + (data.error && data.error.message || res.getContentText()));
-  const text = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
+  let retried = false;
+  if (!engineText_(data)) {
+    retried = true;
+    log_('chat', 'תשובה בלי טקסט · ' + engineDetail_(data) + ' · מנסה שוב');
+    const res2 = callEngine_(key, system, messages);
+    if (res2.getResponseCode() < 300) {
+      const data2 = JSON.parse(res2.getContentText());
+      if (engineText_(data2)) { res = res2; data = data2; }
+    }
+  }
+  const text = engineText_(data);
   const truncated = data.stop_reason === 'max_tokens';
   const out = parseReply_(text);
   // תשובה ריקה אינה "טקסט שלא הצלחתי לקרוא" — היא כלום. אמירה מדויקת חוסכת
@@ -821,11 +851,8 @@ function chat_(b) {
     // end_turn בלי טקסט אינו תקלת רשת: המנוע סיים כרגיל ולא הוציא כלום. כדי לדעת
     // למה, צריך לראות מה באמת חזר — אילו סוגי בלוקים היו בתשובה, וכמה אסימונים
     // נצרכו. בלי זה כל אבחון הוא ניחוש.
-    const kinds = (data.content || []).map(function (c) { return c.type; }).join(',') || 'אין בלוקים';
-    const u = data.usage || {};
-    const detail = (data.stop_reason || 'בלי סיבה') + ' · בלוקים: ' + kinds
-      + ' · אסימונים: ' + (u.input_tokens || '?') + ' נכנסו, ' + (u.output_tokens || 0) + ' יצאו';
-    out.warning = 'המנוע החזיר תשובה ריקה (' + detail + '). שלחו שוב.';
+    const detail = engineDetail_(data);
+    out.warning = 'המנוע החזיר תשובה ריקה' + (retried ? ' גם בניסיון שני' : '') + ' (' + detail + '). שלחו שוב.';
     log_('chat', 'תשובה ריקה · ' + detail + ' · ' + res.getContentText().slice(0, 300));
   } else if (out.parseFailed) {
     out.warning = truncated
