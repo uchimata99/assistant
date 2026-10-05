@@ -849,14 +849,30 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
 /* ===================== שרת ===================== */
 // שיחה עם תמונות לוקחת זמן; כל השאר אמור לחזור מהר. בלי פסק זמן בקשה תקועה נשארת תקועה לנצח.
 const API_TIMEOUT={chat:180000,digest:60000};
+// "Failed to fetch" היא ההודעה שהדפדפן נותן, והיא חסרת תוכן: היא נראית כמו תקלה
+// באפליקציה בזמן שהשרת פשוט אינו נגיש. ב-5 באוקטובר זה עלה ביוקר — ההרשאות בגוגל
+// פגו, הכתובת החזירה דף הפניה, fetch נפל, ואי אפשר היה להבין מההודעה מה קרה.
+// כל ענף כאן אומר מה כנראה קרה ומה לעשות.
 async function post(url,body,ms){
   const ac=new AbortController(); const t=setTimeout(()=>ac.abort(),ms);
   try{
     const res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',signal:ac.signal});
-    if(!res.ok) throw new Error('השרת החזיר שגיאה '+res.status);
-    return await res.json();
+    if(!res.ok) throw new Error('השרת החזיר שגיאה '+res.status+'. אם זה חוזר, בדקו חיבור בהגדרות.');
+    const txt=await res.text();
+    try{ return JSON.parse(txt); }
+    catch(e){
+      // אפס סקריפט מחזיר מדי פעם דף של גוגל במקום תשובה. זה בדרך כלל חולף,
+      // אבל פעולת כתיבה אולי כבר בוצעה — ולכן לא מנסים שוב לבד.
+      throw new Error(/^s*</.test(txt)
+        ? 'השרת החזיר דף של גוגל במקום תשובה. בדרך כלל זה חולף — נסו שוב.'
+        : 'התשובה מהשרת לא נקראה.');
+    }
   }catch(err){
     if(err.name==='AbortError') throw new Error('השרת לא ענה בזמן. נסו שוב.');
+    if(err instanceof TypeError){
+      if(navigator.onLine===false) throw new Error('אין חיבור לאינטרנט במכשיר.');
+      throw new Error('השרת לא נגיש. הסיבה השכיחה היא שההרשאות בגוגל פגו, או שכתובת השרת השתנתה. בדקו בהגדרות עם "בדיקת חיבור".');
+    }
     throw err;
   }finally{ clearTimeout(t); }
 }
@@ -1835,7 +1851,7 @@ async function send(text){
     // שמותר לא לענות. שיחה שלא הניבה דבר פשוט לא נרשמת.
     if(r.reply){ S.history.push({role:'user',content:text||'(תמונה)'},{role:'assistant',content:r.reply}); S.history=S.history.slice(-20); save('history',S.history); }
     if(driveOn()) await driveReview(r,cards,text);
-  }catch(err){ thinking.remove(); addMsg('לא הצלחתי לדבר עם השרת: '+err.message,'sys'); }
+  }catch(err){ thinking.remove(); addRetry('לא הצלחתי לדבר עם השרת. '+err.message,text,imgs); }
 }
 
 /* ===================== מסך הלוז של מחר ===================== */
