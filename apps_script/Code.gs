@@ -303,16 +303,45 @@ function deleteEvent_(id, calendarId, series) {
 }
 
 /* ---------- מטלות: גיליון פרטי + גיליון משותף ---------- */
+// מזהה שמור שאינו נפתח הוא תקלה, לא הזמנה ליצור גיליון חדש. הגרסה הקודמת זרקה
+// את המזהה ויצרה גיליון ריק במקומו, וכך נטשה בשקט את כל המטלות ואת יומן הפעולות.
+// זה קרה בפועל ב-15 באוקטובר 2026, כשהטריגר הלילי רץ עם הרשאה פגומה.
 function privateSheet_() {
-  let id = PROPS.getProperty('SHEET_ID'), ss = null;
-  if (id) { try { ss = SpreadsheetApp.openById(id); } catch (e) { id = null; } }
-  if (!id) {
-    ss = SpreadsheetApp.create('העוזר — מטלות (פרטי)');
-    PROPS.setProperty('SHEET_ID', ss.getId());
-    ss.getActiveSheet().setName('מטלות').appendRow(TASK_HEADER);
-    ss.insertSheet('לוג').appendRow(LOG_HEADER);
+  const id = PROPS.getProperty('SHEET_ID');
+  if (id) {
+    try { return SpreadsheetApp.openById(id); }
+    catch (e) {
+      throw new Error('הגיליון הפרטי לא נפתח: ' + e.message
+        + ' · המזהה השמור ' + id + ' · לא נוצר גיליון חדש במקומו.');
+    }
   }
+  const ss = SpreadsheetApp.create('העוזר — מטלות (פרטי)');
+  PROPS.setProperty('SHEET_ID', ss.getId());
+  ss.getActiveSheet().setName('מטלות').appendRow(TASK_HEADER);
+  ss.insertSheet('לוג').appendRow(LOG_HEADER);
   return ss;
+}
+
+/* ---------- כלי שחזור, להרצה מהעורך ---------- */
+// מציג כל גיליון בשם הזה שקיים בדרייב, עם מועד היצירה והמזהה. הישן הוא האמיתי.
+function listPrivateSheets() {
+  const it = DriveApp.getFilesByName('העוזר — מטלות (פרטי)');
+  let n = 0;
+  while (it.hasNext()) {
+    const f = it.next(); n++;
+    Logger.log(n + '. נוצר ' + Utilities.formatDate(f.getDateCreated(), TZ, 'dd/MM/yyyy HH:mm')
+      + ' · מזהה ' + f.getId());
+  }
+  if (!n) Logger.log('לא נמצא אף גיליון בשם הזה.');
+  Logger.log('המזהה שמוגדר כרגע: ' + PROPS.getProperty('SHEET_ID'));
+}
+// אחרי שזיהית את הגיליון הישן: להדביק את המזהה בשורה למטה ולהריץ.
+function restorePrivateSheet() {
+  const id = '';
+  if (!id) { Logger.log('הדביקו את מזהה הגיליון בתוך הפונקציה, בשורה של id.'); return; }
+  const ss = SpreadsheetApp.openById(id);   // נכשל כאן אם המזהה שגוי, לפני שמשנים משהו
+  PROPS.setProperty('SHEET_ID', id);
+  Logger.log('הוחזר הגיליון: ' + ss.getName() + ' · ' + id);
 }
 function sharedSheet_() {
   const id = PROPS.getProperty('SHARED_SHEET_ID');
