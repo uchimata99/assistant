@@ -600,7 +600,7 @@ const S = {
   cfg: load('cfg', DEFAULTS),
   tasks: load('tasks', []),
   log: load('log', []),
-  events: [], history: load('history', []), pending:{}, images:[], serverLog:null, terms:[], thoughts:[],
+  events: [], history: load('history', []), pending:{}, images:[], serverLog:null, serverLogErr:'', terms:[], thoughts:[],
 };
 let logSrc='local';
 function load(k,d){ try{ const v=JSON.parse(localStorage.getItem('assist:'+k)); return v==null? d : Object.assign(Array.isArray(d)?[]:{}, d, v);}catch(e){return d;} }
@@ -1081,16 +1081,21 @@ function renderLog(){
       const when=new Date(e.when); const ok=!isNaN(when.getTime());
       return `<div class="log"><div>${esc(LOG_LABEL[e.action]||e.action)}${e.details?': '+esc(e.details):''}</div>
         <div class="when">${esc(ok?when.toLocaleString('he-IL',{dateStyle:'short',timeStyle:'short'}):String(e.when))} · בגיליון</div></div>`;
-    }).join(''):`<div class="empty"><b>הגיליון ריק</b></div>`;
+    }).join(''):(S.serverLogErr
+      ?`<div class="empty"><b>לא הצלחתי לקרוא את יומן השרת</b>${esc(S.serverLogErr)}<button class="btn ghost" id="logretry">נסה שוב</button></div>`
+      :`<div class="empty"><b>הגיליון ריק</b></div>`);
     return;
   }
   box.innerHTML=S.log.length?S.log.slice().reverse().map((l,i)=>`<div class="log"><div>${esc(l.text)}${l.undoable&&!l.undone?`<button class="undo" data-i="${S.log.length-1-i}">בטל</button>`:''}${l.undone?' · בוטל':''}</div><div class="when">${esc(l.when)}${l.by?' · '+esc(l.by):''}</div></div>`).join('')
     :`<div class="empty"><b>עדיין אין פעולות</b></div>`;
 }
+// קריאה שנכשלה הציגה את אותו מסך בדיוק כמו גיליון ריק, וההודעה על הכישלון
+// הבהבה שתי שניות ונעלמה. כך "הגיליון ריק" נראה כמו עובדה על הנתונים בזמן
+// שהוא היה תקלת רשת. השגיאה נשמרת עכשיו ומוצגת במקום הרשימה.
 async function loadServerLog(){
-  if(demo()){ S.serverLog=[]; return; }
-  try{ const r=await api('log',{limit:120}); S.serverLog=r.entries||[]; }
-  catch(err){ S.serverLog=[]; toast('לא הצלחתי לקרוא את יומן השרת: '+err.message); }
+  if(demo()){ S.serverLog=[]; S.serverLogErr=''; return; }
+  try{ const r=await api('log',{limit:120}); S.serverLog=r.entries||[]; S.serverLogErr=''; }
+  catch(err){ S.serverLog=[]; S.serverLogErr=err.message||'השרת לא ענה'; }
   if(logSrc==='server') renderLog();
 }
 function addLog(text,extra={}){ S.log.push({text,ts:Date.now(),when:new Date().toLocaleString('he-IL',{dateStyle:'short',timeStyle:'short'}),...extra}); if(S.log.length>300)S.log.shift(); save('log',S.log); renderLog(); }
@@ -2434,6 +2439,10 @@ let pressT=null;
   const startPress=e=>{const row=e.target.closest('.task');if(!row||e.target.closest('button'))return;pressT=setTimeout(()=>{const t=S.tasks.find(x=>x.id===row.dataset.id);if(!t)return;if(!t.mit&&S.tasks.filter(x=>x.mit&&!x.done).length>=S.cfg.mitmax){toast('כבר יש '+S.cfg.mitmax+' מטלות מהותיות להיום.');return;}t.mit=!t.mit;save('tasks',S.tasks);renderTasks();if(!demo())api('updateTask',{id:t.id,shared:t.shared,mit:t.mit}).catch(()=>{});toast(t.mit?'קודמה למהותיות של היום':'הוחזרה לשאר המטלות');},550);};
   const endPress=()=>clearTimeout(pressT);
   box.addEventListener('pointerdown',startPress);box.addEventListener('pointerup',endPress);box.addEventListener('pointerleave',endPress);box.addEventListener('pointercancel',endPress);
+});
+$('log').addEventListener('click',e=>{
+  if(!e.target.closest('#logretry')) return;
+  S.serverLog=null; S.serverLogErr=''; renderLog();
 });
 $('logsrc').addEventListener('click',e=>{
   const b=e.target.closest('button[data-src]'); if(!b) return;
