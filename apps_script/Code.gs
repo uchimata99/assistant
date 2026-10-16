@@ -59,7 +59,6 @@ function doPost(e) {
       case 'terms':          return json_({ terms: listTerms_() });
       case 'addTerm':        return json_(addTerm_(b));
       case 'deleteTerm':     return json_(deleteTerm_(b));
-      case 'createDraft':    return json_(createDraft_(b));
       case 'log':            return json_({ entries: readLog_(b.limit || 120) });
       case 'digest':         return json_(digest_(b));
       case 'setDigest':      return json_(setDigest_(b));
@@ -323,18 +322,8 @@ function privateSheet_() {
 }
 
 /* ---------- כלי שחזור, להרצה מהעורך ---------- */
-// מציג כל גיליון בשם הזה שקיים בדרייב, עם מועד היצירה והמזהה. הישן הוא האמיתי.
-function listPrivateSheets() {
-  const it = DriveApp.getFilesByName('העוזר — מטלות (פרטי)');
-  let n = 0;
-  while (it.hasNext()) {
-    const f = it.next(); n++;
-    Logger.log(n + '. נוצר ' + Utilities.formatDate(f.getDateCreated(), TZ, 'dd/MM/yyyy HH:mm')
-      + ' · מזהה ' + f.getId());
-  }
-  if (!n) Logger.log('לא נמצא אף גיליון בשם הזה.');
-  Logger.log('המזהה שמוגדר כרגע: ' + PROPS.getProperty('SHEET_ID'));
-}
+// איתור גיליונות דרך דרייב הוסר יחד עם הרשאת הדרייב המלאה. את המזהה מוצאים
+// ידנית בדרייב, לפי השם, והוא המחרוזת שבכתובת בין d/ לבין edit.
 // אחרי שזיהית את הגיליון הישן: להדביק את המזהה בשורה למטה ולהריץ.
 function restorePrivateSheet() {
   const id = '';
@@ -620,8 +609,6 @@ function deleteTerm_(b) {
   return { ok: false, terms: listTerms_() };
 }
 
-/* ---------- ג'ימייל: טיוטה בלבד ---------- */
-function createDraft_(b) { GmailApp.createDraft(b.to || '', b.subject || '', b.body || ''); log_('createDraft', b.subject || ''); return { ok: true }; }
 
 
 /* ---------- גשר אל משימות גוגל ---------- */
@@ -803,7 +790,8 @@ function chat_(b) {
     'מטלות פתוחות (עם מי הוסיף): ' + JSON.stringify(ctx.tasks || []),
     'מגבלת המטלות המהותיות ליום: ' + (ctx.mitmax || 3) + '.',
     '',
-    'כלל יסוד: אתה מציע, לא מבצע. כל פגישה, מטלה או מייל חוזרים כהצעה שמאושרת בלחיצה. מייל נשמר כטיוטה בלבד.',
+    'כלל יסוד: אתה מציע, לא מבצע. כל פגישה או מטלה חוזרות כהצעה שמאושרת בלחיצה, ושום דבר לא נכנס ליומן או לרשימה בלי אישור.',
+    'אין לך יכולת לכתוב מייל. אם מבקשים ממך לשלוח או לנסח מייל, אמור זאת ב-reply ואל תחזיר הצעה.',
     'ניסוח ה-reply: כל הצעה ממתינה לאישור, ולכן ה-reply לעולם אינו אומר שמשהו כבר נעשה — לא "רשמתי", "קבעתי", "הוספתי", "שמרתי", "ביטלתי" או "אזכיר לך". כתוב מה הכנת ושזה מחכה לאישור, למשל "הכנתי מחשבה לערב ראש השנה, לאשר?". מי שקורא "רשמתי" אינו לוחץ על אישור, והפריט אובד בשקט.',
     'פרטי או משותף: shared=true כשמדובר בילד, במשפחה, בבית, או כשנאמר במפורש "משותף", "לשנינו", "שבן או בת הזוג יראו". אחרת shared=false והפריט נשאר פרטי ביומן האישי. תמיד אפשר לשנות בכרטיס.',
     'תמונות והודעות מועברות: אם צורפה תמונה (צילום מסך של ווטסאפ, הזמנה, לוח חוגים, מכתב מבית הספר) או הודבק טקסט מועבר — חלץ ממנו את כל האירועים והמטלות, כל אחד כהצעה נפרדת עם תאריך ושעה מדויקים. אם השנה חסרה, הנח את המועד הקרוב הבא. ציין ב־why מאיפה נלקח כל פרט. אם משהו לא ברור בתמונה, שאל במקום לנחש.',
@@ -837,7 +825,6 @@ function chat_(b) {
     ' {"type":"event","title":"...","start":"ISO עם אזור זמן","end":"ISO","location":"","tags":["שם ילד"],"shared":false,"repeat":null,"why":"..."},',
     ' {"type":"task","title":"...","tags":[],"shared":false,"importance":"high|normal","due":"YYYY-MM-DD","mit":false,"items":[],"why":"..."},',
     'מטלה עם רשימה: כשהבקשה מכילה כמה דברים לעשות תחת כותרת אחת — קניות, ציוד לטיול, הכנות לאירוע — החזר מטלה אחת עם items, מערך של מחרוזות קצרות, ולא מטלה נפרדת לכל פריט. מטלה רגילה מחזירה items ריק.',
-    ' {"type":"email_draft","to":"","subject":"...","body":"...","why":"..."},',
     ' {"type":"reminder","eventId":"המזהה מתוך רשימת האירועים","title":"שם האירוע כפי שהוא ביומן","start":"ISO של האירוע","minutes":[60],"why":"..."},',
     ' {"type":"term","term":"המילה כפי שנאמרה","kind":"place|person|activity|other","guess":"ההשערה שלך, או ריק","why":"למה שאלת"},',
     ' {"type":"thought","text":"הלקח במילים שלו","occasion":"שם המועד","anchor":"YYYY-MM-DD של המועד השנה","cal":"heb|greg","hm":"Elul","hd":29,"lead":7,"why":"..."},',
@@ -917,7 +904,6 @@ function parseReply_(text) {
  *                        ג'ימייל מצלצל בטלפון, ושום דבר לא נערם ביומן.
  *   notify             — אירוע קצר ביומן האישי, עם התקציר בתיאור ותזכורת קופצת. למי שרוצה
  *                        את התקציר בתוך היומן. יציאה מהערוץ הזה מוחקת את האירוע שנשאר.
- *   draft              — נשמר כטיוטה בג'ימייל. שומר על הכלל "לא שולחים מהקוד".
  *   off                — כבוי.
  *
  * בערוץ notify הטריגר רץ שעתיים לפני שעת ההתראה, כי טריגר זמן באפס סקריפט מדויק
@@ -940,7 +926,7 @@ function selfEmail_() {
   return Session.getEffectiveUser().getEmail() || Session.getActiveUser().getEmail() || '';
 }
 function setDigest_(b) {
-  const channel = ['notify', 'draft', 'email', 'off'].indexOf(b.channel) >= 0 ? b.channel : 'email';
+  const channel = ['notify', 'email', 'off'].indexOf(b.channel) >= 0 ? b.channel : 'email';
   let hour = Number(b.hour); if (isNaN(hour) || hour < 0 || hour > 23) hour = 21;
   PROPS.setProperty('DIGEST_CHANNEL', channel);
   PROPS.setProperty('DIGEST_HOUR', String(hour));
@@ -962,7 +948,7 @@ function nextAt_(hour) {
   d.setHours(hour);
   return d;
 }
-function installDailyDigest() { Logger.log(JSON.stringify(setDigest_({ channel: PROPS.getProperty('DIGEST_CHANNEL') || 'draft', hour: PROPS.getProperty('DIGEST_HOUR') || 21 }))); }
+function installDailyDigest() { Logger.log(JSON.stringify(setDigest_({ channel: PROPS.getProperty('DIGEST_CHANNEL') || 'email', hour: PROPS.getProperty('DIGEST_HOUR') || 21 }))); }
 function removeDailyDigest() { Logger.log(JSON.stringify(setDigest_({ channel: 'off' }))); }
 
 function buildDigest_(ref) {
@@ -1080,23 +1066,16 @@ function dailyDigest() {
   const subject = 'העוזר — הלוז של מחר';
   const to = selfEmail_();
   if (!to) { log_('digest', 'אין כתובת דואר לבעל הסקריפט'); return; }
-  if (cfg.channel === 'email') {
-    // רק אל עצמך. הכתובת נלקחת מהחשבון ולא מגוף הבקשה, כדי שלא ניתן יהיה לשלוח לאף אחד אחר.
-    MailApp.sendEmail(to, subject, body);
-    markSaid_(said);
-    log_('digest', 'נשלח תקציר אל ' + to);
-  } else {
-    GmailApp.createDraft(to, subject, body);
-    markSaid_(said);
-    log_('digest', 'נשמרה טיוטת תקציר');
-  }
+  // רק אל עצמך. הכתובת נלקחת מהחשבון ולא מגוף הבקשה, כדי שלא ניתן יהיה לשלוח לאף אחד אחר.
+  MailApp.sendEmail(to, subject, body);
+  markSaid_(said);
+  log_('digest', 'נשלח תקציר אל ' + to);
 }
 
 /* ---------- הגדרה חד־פעמית ---------- */
 function setup() {
   CalendarApp.getAllCalendars().length;
   privateSheet_();
-  GmailApp.getDrafts();
   if (!PROPS.getProperty('APP_SECRET')) PROPS.setProperty('APP_SECRET', Utilities.getUuid());
   Logger.log('APP_SECRET = ' + PROPS.getProperty('APP_SECRET') + ' — להעתיק לשדה "סוד" בהגדרות האפליקציה, בכל מכשיר. בלעדיו כל מי שמכיר את הכתובת יכול לקרוא ולכתוב.');
   Logger.log('מוכן. גיליון פרטי: ' + PROPS.getProperty('SHEET_ID') + ' | גיליון משותף: ' + (PROPS.getProperty('SHARED_SHEET_ID') || 'לא מוגדר'));

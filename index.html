@@ -441,7 +441,6 @@ details[open]>summary{border-bottom:1px solid var(--line)}
         <select id="digestch">
           <option value="email">מייל אליי</option>
           <option value="notify">אירוע ביומן</option>
-          <option value="draft">טיוטה בג'ימייל</option>
           <option value="off">כבוי</option>
         </select>
         <select id="digesth"></select>
@@ -920,7 +919,7 @@ function demoChat(msg,images){
   } else if(/מטלה|תזכיר|תזכור|צריך ל|צריכה ל|לקנות/.test(m)){
     props.push({type:'task',title:m.replace(/^(תזכיר לי|מטלה:?|תוסיף|תזכור)\s*/,'').trim(),tags,shared,importance:/חשוב/.test(m)?'high':'normal',due:ymd(base),why:'זיהיתי מטלה.'});
   } else if(/מייל|כתוב ל|נסח/.test(m)){
-    props.push({type:'email_draft',to:'',subject:'בהמשך לשיחתנו',body:'שלום,\n\n'+m+'\n\nבברכה,\n'+S.cfg.me,tags:[],why:'טיוטה בלבד — תישמר בטיוטות ולא תישלח.'});
+    props.push({type:'task',title:'לכתוב מייל: '+m,tags:[],shared:false,importance:'normal',due:ymd(base),why:'העוזר אינו כותב מיילים. נשמר כמטלה כדי שלא תאבד.'});
   }
   const reply=props.length?'הנה מה שהבנתי. אפשר לשנות בין פרטי למשותף לפני האישור.':
     (/נשאר/.test(m)?'להיום נשארו '+S.tasks.filter(t=>!t.done&&t.due===ymd(new Date())).length+' מטלות.':
@@ -1498,13 +1497,6 @@ function editForm(p){
       </select></label>
     </div>`;
   }
-  if(p.type==='email_draft'){
-    return `<div class="edit" hidden>
-      <label>אל<input type="text" class="ltr" data-e="to" value="${esc(p.to||'')}"></label>
-      <label>נושא<input type="text" data-e="subject" value="${esc(p.subject||'')}"></label>
-      <label>תוכן<textarea data-e="body" rows="5">${esc(p.body||'')}</textarea></label>
-    </div>`;
-  }
   return '';
 }
 // מטלה אינה נכנסת ליומן גוגל לעולם. כשמתברר שהתכוונו לפגישה, ההמרה נעשית כאן
@@ -1646,7 +1638,6 @@ function describe(p){
     meta:(p.occasion?p.occasion+' · ':'')+whenWords(nextOccurrence(p),+p.lead||0)};
   if(p.type==='term') return {kind:'מילה שלא הכרתי',title:p.term||'',
     meta:p.meaning?p.meaning:(p.guess?('ניחשתי: '+p.guess+'. לתקן אם לא מדויק.'):'מה זה? אחרי שתסביר, לא אשאל שוב.')};
-  if(p.type==='email_draft') return {kind:'טיוטת מייל (לא נשלחת)',title:p.subject||'ללא נושא',meta:(p.to?'אל: '+p.to+'\n':'')+(p.body||'')};
   return {kind:p.type,title:JSON.stringify(p),meta:''};
 }
 // התנגשות נבדקת כאן ולא במנוע: באפליקציה יושבים כל האירועים, והתשובה דטרמיניסטית
@@ -1703,13 +1694,12 @@ function addProposal(p){
   // המנוע מחזיר פריטים כמחרוזות; בפנים הם תמיד {t,d} כדי שאפשר יהיה לסמן אותם.
   p.items=(p.items||[]).map(x=>typeof x==='string'?{t:x,d:false}:{t:String((x&&x.t)||''),d:!!(x&&x.d)}).filter(x=>x.t);
   if(p.shared==null) p.shared=p.tags.length>0;
-  if(p.type==='email_draft') p.shared=false;
   S.pending[id]=p;
   const h=accentOf(p); const d=describe(p);
   const el=document.createElement('div'); el.className='prop'; el.style.setProperty('--hat',h.color); el.dataset.id=id;
   // למונח אין בעלים ואין פרטי או משותף. הוא מילה במילון, לא פריט ביומן.
   const isTerm=p.type==='term'||p.type==='thought'||p.type==='delete_event';
-  const canShare=p.type!=='email_draft'&&!isTerm;
+  const canShare=!isTerm;
   el.innerHTML=`<div class="kind"><span class="dot" style="${hatVars(h.color)}"></span>${esc(h.name)}${h.name?' · ':''}${esc(d.kind)}</div>
     <div class="pt">${esc(d.title)}${repChip(p)}${tagChips(p.tags)}</div><div class="pm">${esc(d.meta)}</div>
     ${p.why?`<div class="why">${esc(p.why)}</div>`:''}
@@ -1818,9 +1808,6 @@ async function approve(id,el){
       const r=await api('addTerm',{term:p.term,meaning:meaning,kind:p.kind||'other'});
       if(r.terms) S.terms=r.terms; renderTerms();
       addLog('נלמד מונח: '+p.term+' — '+meaning,{by:'באישורך'});
-    } else if(p.type==='email_draft'){
-      await api('createDraft',{to:p.to||'',subject:p.subject||'',body:p.body||''});
-      addLog('נשמרה טיוטת מייל: '+(p.subject||'ללא נושא')+' — ממתינה לשליחה שלך',{by:'באישורך'});
     }
     st.textContent='בוצע'; el.classList.add('done'); delete S.pending[id];
   }catch(err){ st.textContent='נכשל: '+err.message+'. אפשר לנסות שוב.'; }
@@ -2236,7 +2223,6 @@ function spokenCard(p){
   }
   if(p.type==='thought') return 'מחשבה למועד. '+(p.text||'')+'. '+(p.occasion?'ב'+p.occasion+'. ':'')+'אזכיר לך '+((+p.lead||0)?(+p.lead)+' ימים לפני':'ביום עצמו')+'.';
   if(p.type==='term') return 'לא הכרתי את '+(p.term||'')+'.';
-  if(p.type==='email_draft') return 'טיוטת מייל. '+(p.subject||'ללא נושא');
   return describe(p).title;
 }
 
@@ -2466,7 +2452,7 @@ $('digesttest').addEventListener('click',async()=>{
     const r=await api('digest',{fire:true});
     const ch=$('digestch').value;
     $('digeststat').textContent=ch==='notify'?('נוצר אירוע ניסיון ביומן. התזכורת תצלצל ב־'+(r.firedAt||'עוד כשתי דקות')+'. מהערב זה יקרה בשעה שבחרת.')
-      :ch==='email'?'נשלח אליך עכשיו.':ch==='draft'?"נשמרה טיוטה בג'ימייל.":'הערוץ כבוי.';
+      :ch==='email'?'נשלח אליך עכשיו.':'הערוץ כבוי.';
     addLog('נשלחה התראת ניסיון של תקציר הערב',{by:'באישורך'});
   }catch(err){$('digeststat').textContent='נכשל: '+err.message;}
 });
@@ -2538,7 +2524,7 @@ $('digestsave').addEventListener('click',async()=>{
   $('digeststat').textContent='מחיל...';
   try{
     const r=await api('setDigest',{channel:S.cfg.digestChannel,hour:S.cfg.digestHour,appUrl:location.origin+location.pathname});
-    addLog('הוגדר תקציר ערב: '+(S.cfg.digestChannel==='off'?'כבוי':(S.cfg.digestChannel==='email'?'דואר':'טיוטה')+' בשעה '+pad(S.cfg.digestHour)+':00'),{by:'באישורך'});
+    addLog('הוגדר תקציר ערב: '+(S.cfg.digestChannel==='off'?'כבוי':(S.cfg.digestChannel==='email'?'דואר':'אירוע ביומן')+' בשעה '+pad(S.cfg.digestHour)+':00'),{by:'באישורך'});
     if(S.cfg.digestChannel==='off'){$('digeststat').textContent='כובה.';return;}
     const d=await api('digest');
     $('digeststat').textContent='הופעל'+(r.config&&r.config.to?' · יגיע אל '+r.config.to:'')+'. כך זה ייראה:';
