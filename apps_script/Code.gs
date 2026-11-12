@@ -24,10 +24,28 @@ const TZ = Session.getScriptTimeZone();
 const TASK_HEADER = ['מזהה', 'כותרת', '(לא בשימוש)', 'תגים', 'חשיבות', 'תאריך יעד', 'מהותית', 'בוצע', 'מי הוסיף', 'נוצר', 'פריטים'];
 const LOG_HEADER = ['זמן', 'פעולה', 'פרטים', 'מזהה אירוע', 'מזהה יומן'];
 
-function doGet() { return json_({ ok: true, service: 'assistant', tz: TZ }); }
+/*
+ * מתג כיבוי. כש-SYSTEM_OFF הוא true השרת אינו מבצע דבר: לא יומן, לא גיליונות,
+ * לא משימות ולא פנייה למנוע. הוא עונה משפט ברור, כדי שבאפליקציה יופיע "כבוי"
+ * ולא שגיאת רשת שנראית כמו תקלה.
+ *
+ * נבחר מתג בקוד ולא מחיקת הפריסה, כדי שכתובת השרת תישמר: מחיקה הייתה מחייבת
+ * להדביק כתובת חדשה בשני הטלפונים. הדלקה חזרה: להחזיר ל-false, לדחוף ולפרוס.
+ *
+ * הטריגר של תקציר הערב הוסר בנפרד בשני החשבונות (setDigest עם off), כי טריגר
+ * מתוזמן רץ בשרת ואינו עובר דרך doPost.
+ */
+const SYSTEM_OFF = true;
+const SYSTEM_OFF_MSG = 'העוזר כבוי. כדי להדליק אותו צריך לשנות את SYSTEM_OFF ל-false ולפרוס מחדש.';
+
+function doGet() {
+  if (SYSTEM_OFF) return json_({ ok: false, off: true, error: SYSTEM_OFF_MSG });
+  return json_({ ok: true, service: 'assistant', tz: TZ });
+}
 
 function doPost(e) {
   try {
+    if (SYSTEM_OFF) return json_({ ok: false, off: true, error: SYSTEM_OFF_MSG });
     const b = JSON.parse(e.postData.contents || '{}');
     const secret = PROPS.getProperty('APP_SECRET');
     if (secret && b.secret !== secret) {
